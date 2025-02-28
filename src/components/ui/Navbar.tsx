@@ -16,26 +16,25 @@ import {
 import { ModeToggle } from "@/components/ui/dark-mode";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@components/ui/sheet";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@components/ui/collapsible"; // Verify this import
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@components/ui/collapsible";
+import { createSupabaseClient } from "../../../supabaseClient"; // Direct import
+import { toast } from "sonner";
 
-const components: { title: string; href: string; description: string }[] = [
+const components = [
     {
         title: "Alert Dialog",
         href: "/docs/primitives/alert-dialog",
-        description:
-            "A modal dialog that interrupts the user with important content and expects a response.",
+        description: "A modal dialog that interrupts the user with important content and expects a response.",
     },
     {
         title: "Hover Card",
         href: "/docs/primitives/hover-card",
-        description:
-            "For sighted users to preview content available behind a link.",
+        description: "For sighted users to preview content available behind a link.",
     },
     {
         title: "Progress",
         href: "/docs/primitives/progress",
-        description:
-            "Displays an indicator showing the completion progress of a task, typically displayed as a progress bar.",
+        description: "Displays an indicator showing the completion progress of a task, typically displayed as a progress bar.",
     },
     {
         title: "Scroll-area",
@@ -45,14 +44,12 @@ const components: { title: string; href: string; description: string }[] = [
     {
         title: "Tabs",
         href: "/docs/primitives/tabs",
-        description:
-            "A set of layered sections of content—known as tab panels—that are displayed one at a time.",
+        description: "A set of layered sections of content—known as tab panels—that are displayed one at a time.",
     },
     {
         title: "Tooltip",
         href: "/docs/primitives/tooltip",
-        description:
-            "A popup that displays information related to an element when the element receives keyboard focus or the mouse hovers over it.",
+        description: "A popup that displays information related to an element when the element receives keyboard focus or the mouse hovers over it.",
     },
 ];
 
@@ -60,6 +57,54 @@ export function NavigationMenuDemo() {
     const [isOpen, setIsOpen] = React.useState(false);
     const [gettingStartedOpen, setGettingStartedOpen] = React.useState(false);
     const [somethingElseOpen, setSomethingElseOpen] = React.useState(false);
+    const [isLoggedIn, setIsLoggedIn] = React.useState(false);
+    const [supabase, setSupabase] = React.useState<ReturnType<typeof createSupabaseClient> | null>(null);
+
+    // Initialize Supabase client on client side
+    React.useEffect(() => {
+        try {
+            const client = createSupabaseClient();
+            setSupabase(client);
+
+            // Initial session check
+            const checkSession = async () => {
+                const { data: { session } } = await client.auth.getSession();
+                setIsLoggedIn(!!session);
+                console.log("Initial session check:", session); // Debug log
+            };
+            checkSession();
+
+            // Subscribe to auth state changes
+            const { data: authListener } = client.auth.onAuthStateChange((event, session) => {
+                setIsLoggedIn(!!session);
+                console.log("Auth state change:", event, session); // Debug log
+            });
+
+            // Cleanup subscription on unmount
+            return () => {
+                authListener.subscription.unsubscribe();
+            };
+        } catch (error) {
+            console.error("Failed to initialize Supabase client:", error);
+        }
+    }, []);
+
+    // Logout function
+    const handleLogout = async () => {
+        if (supabase) {
+            const { error } = await supabase.auth.signOut();
+            if (error) console.error("Logout failed:", error.message);
+            else setIsLoggedIn(false); // Force update state
+            toast.success("Logout successful!", { description: "See you soon!" });
+            setTimeout(() => {
+                window.location.href = "/"; // Full reload to sync state
+            }, 200);
+        }
+    };
+
+    if (!supabase) {
+        return <div>Loading...</div>; // Optional loading state while Supabase initializes
+    }
 
     return (
         <NavigationMenu
@@ -79,16 +124,11 @@ export function NavigationMenuDemo() {
                     </SheetTrigger>
                     <SheetContent side="left">
                         <div className="p-4">
-                            <h2 className="sr-only">Navigation Menu</h2> {/* Hidden title for accessibility */}
+                            <h2 className="sr-only">Navigation Menu</h2>
                             <NavigationMenuList className="flex flex-col gap-2">
                                 <NavigationMenuItem>
-                                    <Collapsible
-                                        open={gettingStartedOpen}
-                                        onOpenChange={setGettingStartedOpen}
-                                    >
-                                        <CollapsibleTrigger
-                                            className={cn(navigationMenuTriggerStyle(), "w-full justify-between")}
-                                        >
+                                    <Collapsible open={gettingStartedOpen} onOpenChange={setGettingStartedOpen}>
+                                        <CollapsibleTrigger className={cn(navigationMenuTriggerStyle(), "w-full justify-between")}>
                                             Getting started
                                             <span>{gettingStartedOpen ? "▼" : "▶"}</span>
                                         </CollapsibleTrigger>
@@ -103,8 +143,7 @@ export function NavigationMenuDemo() {
                                                             <Icons.rocket className="h-6 w-6" />
                                                             <div className="mt-2 text-sm font-medium">shadcn/ui</div>
                                                             <p className="text-xs leading-tight text-muted-foreground">
-                                                                Beautifully designed components built with Radix UI and
-                                                                Tailwind CSS.
+                                                                Beautifully designed components built with Radix UI and Tailwind CSS.
                                                             </p>
                                                         </Link>
                                                     </NavigationMenuLink>
@@ -123,24 +162,15 @@ export function NavigationMenuDemo() {
                                     </Collapsible>
                                 </NavigationMenuItem>
                                 <NavigationMenuItem>
-                                    <Collapsible
-                                        open={somethingElseOpen}
-                                        onOpenChange={setSomethingElseOpen}
-                                    >
-                                        <CollapsibleTrigger
-                                            className={cn(navigationMenuTriggerStyle(), "w-full justify-between")}
-                                        >
+                                    <Collapsible open={somethingElseOpen} onOpenChange={setSomethingElseOpen}>
+                                        <CollapsibleTrigger className={cn(navigationMenuTriggerStyle(), "w-full justify-between")}>
                                             Something else
                                             <span>{somethingElseOpen ? "▼" : "▶"}</span>
                                         </CollapsibleTrigger>
                                         <CollapsibleContent className="ml-4">
                                             <ul className="grid gap-2">
                                                 {components.map((component) => (
-                                                    <ListItem
-                                                        key={component.title}
-                                                        title={component.title}
-                                                        href={component.href}
-                                                    >
+                                                    <ListItem key={component.title} title={component.title} href={component.href}>
                                                         {component.description}
                                                     </ListItem>
                                                 ))}
@@ -150,25 +180,29 @@ export function NavigationMenuDemo() {
                                 </NavigationMenuItem>
                                 <NavigationMenuItem>
                                     <Link href="/dashboard" legacyBehavior passHref>
-                                        <NavigationMenuLink className={navigationMenuTriggerStyle()}>
-                                            Dashboard
-                                        </NavigationMenuLink>
+                                        <NavigationMenuLink className={navigationMenuTriggerStyle()}>Dashboard</NavigationMenuLink>
                                     </Link>
                                 </NavigationMenuItem>
-                                <NavigationMenuItem>
-                                    <Link href="/login" legacyBehavior passHref>
-                                        <NavigationMenuLink className={navigationMenuTriggerStyle()}>
-                                            Log In
+                                {isLoggedIn ? (
+                                    <NavigationMenuItem>
+                                        <NavigationMenuLink onClick={handleLogout} className={navigationMenuTriggerStyle()}>
+                                            Logout
                                         </NavigationMenuLink>
-                                    </Link>
-                                </NavigationMenuItem>
-                                <NavigationMenuItem>
-                                    <Link href="/signup" legacyBehavior passHref>
-                                        <NavigationMenuLink className={navigationMenuTriggerStyle()}>
-                                            Sign Up
-                                        </NavigationMenuLink>
-                                    </Link>
-                                </NavigationMenuItem>
+                                    </NavigationMenuItem>
+                                ) : (
+                                    <>
+                                        <NavigationMenuItem>
+                                            <Link href="/login" legacyBehavior passHref>
+                                                <NavigationMenuLink className={navigationMenuTriggerStyle()}>Log In</NavigationMenuLink>
+                                            </Link>
+                                        </NavigationMenuItem>
+                                        <NavigationMenuItem>
+                                            <Link href="/signup" legacyBehavior passHref>
+                                                <NavigationMenuLink className={navigationMenuTriggerStyle()}>Sign Up</NavigationMenuLink>
+                                            </Link>
+                                        </NavigationMenuItem>
+                                    </>
+                                )}
                             </NavigationMenuList>
                         </div>
                     </SheetContent>
@@ -190,12 +224,9 @@ export function NavigationMenuDemo() {
                                             href="/"
                                         >
                                             <Icons.rocket className="h-6 w-6" />
-                                            <div className="mb-2 mt-4 text-lg font-medium">
-                                                shadcn/ui
-                                            </div>
+                                            <div className="mb-2 mt-4 text-lg font-medium">shadcn/ui</div>
                                             <p className="text-sm leading-tight text-muted-foreground">
-                                                Beautifully designed components built with Radix UI and
-                                                Tailwind CSS.
+                                                Beautifully designed components built with Radix UI and Tailwind CSS.
                                             </p>
                                         </Link>
                                     </NavigationMenuLink>
@@ -217,11 +248,7 @@ export function NavigationMenuDemo() {
                         <NavigationMenuContent>
                             <ul className="grid w-[400px] gap-3 p-4 md:w-[500px] md:grid-cols-2 lg:w-[600px]">
                                 {components.map((component) => (
-                                    <ListItem
-                                        key={component.title}
-                                        title={component.title}
-                                        href={component.href}
-                                    >
+                                    <ListItem key={component.title} title={component.title} href={component.href}>
                                         {component.description}
                                     </ListItem>
                                 ))}
@@ -230,25 +257,29 @@ export function NavigationMenuDemo() {
                     </NavigationMenuItem>
                     <NavigationMenuItem>
                         <Link href="/dashboard" legacyBehavior passHref>
-                            <NavigationMenuLink className={navigationMenuTriggerStyle()}>
-                                Dashboard
-                            </NavigationMenuLink>
+                            <NavigationMenuLink className={navigationMenuTriggerStyle()}>Dashboard</NavigationMenuLink>
                         </Link>
                     </NavigationMenuItem>
-                    <NavigationMenuItem>
-                        <Link href="/login" legacyBehavior passHref>
-                            <NavigationMenuLink className={navigationMenuTriggerStyle()}>
-                                Log In
+                    {isLoggedIn ? (
+                        <NavigationMenuItem>
+                            <NavigationMenuLink onClick={handleLogout} className={navigationMenuTriggerStyle()}>
+                                Logout
                             </NavigationMenuLink>
-                        </Link>
-                    </NavigationMenuItem>
-                    <NavigationMenuItem>
-                        <Link href="/signup" legacyBehavior passHref>
-                            <NavigationMenuLink className={navigationMenuTriggerStyle()}>
-                                Sign Up
-                            </NavigationMenuLink>
-                        </Link>
-                    </NavigationMenuItem>
+                        </NavigationMenuItem>
+                    ) : (
+                        <>
+                            <NavigationMenuItem>
+                                <Link href="/login" legacyBehavior passHref>
+                                    <NavigationMenuLink className={navigationMenuTriggerStyle()}>Log In</NavigationMenuLink>
+                                </Link>
+                            </NavigationMenuItem>
+                            <NavigationMenuItem>
+                                <Link href="/signup" legacyBehavior passHref>
+                                    <NavigationMenuLink className={navigationMenuTriggerStyle()}>Sign Up</NavigationMenuLink>
+                                </Link>
+                            </NavigationMenuItem>
+                        </>
+                    )}
                 </NavigationMenuList>
                 <ModeToggle />
             </div>
@@ -256,28 +287,26 @@ export function NavigationMenuDemo() {
     );
 }
 
-const ListItem = React.forwardRef<
-    React.ElementRef<"a">,
-    React.ComponentPropsWithoutRef<"a">
->(({ className, title, children, ...props }, ref) => {
-    return (
-        <li>
-            <NavigationMenuLink asChild>
-                <a
-                    ref={ref}
-                    className={cn(
-                        "block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
-                        className
-                    )}
-                    {...props}
-                >
-                    <div className="text-sm font-medium leading-none">{title}</div>
-                    <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">
-                        {children}
-                    </p>
-                </a>
-            </NavigationMenuLink>
-        </li>
-    );
-});
+// Updated ListItem with correct TypeScript types
+const ListItem = React.forwardRef<HTMLAnchorElement, { className?: string; title: string; children: React.ReactNode; href: string }>(
+    ({ className, title, children, href }, ref) => {
+        return (
+            <li>
+                <NavigationMenuLink asChild>
+                    <a
+                        ref={ref}
+                        href={href}
+                        className={cn(
+                            "block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
+                            className
+                        )}
+                    >
+                        <div className="text-sm font-medium leading-none">{title}</div>
+                        <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">{children}</p>
+                    </a>
+                </NavigationMenuLink>
+            </li>
+        );
+    }
+);
 ListItem.displayName = "ListItem";

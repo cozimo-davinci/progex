@@ -1,4 +1,4 @@
-"use client"; // Add this at the top
+"use client";
 import type React from "react";
 import { cn } from "@/components/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -6,53 +6,126 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Image from "next/image";
-import { useState } from "react";
-import { useRouter } from "next/navigation"; // Fixed import string formatting
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { createSupabaseClient } from "../../../supabaseClient"; // Adjust path as needed
 
 export function LoginForm({ className, ...props }: React.ComponentProps<"div">) {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [error, setError] = useState<string | null>(null); // Added error state for UI
+    const [error, setError] = useState<string | null>(null);
     const router = useRouter();
     const [showPassword, setShowPassword] = useState(false);
+    const [supabase, setSupabase] = useState<ReturnType<typeof createSupabaseClient> | null>(null);
+    const [isLoading, setIsLoading] = useState(true); // Add loading state
+
+    // Initialize Supabase client on client side
+    useEffect(() => {
+        let isMounted = true;
+
+        const initializeSupabase = async () => {
+            try {
+                const client = createSupabaseClient();
+                if (isMounted) {
+                    setSupabase(client);
+                    console.log("Supabase client initialized:", client); // Debug log
+                }
+            } catch (err) {
+                console.error("Failed to initialize Supabase client:", err);
+                if (isMounted) {
+                    setError("Failed to initialize authentication. Please refresh the page.");
+                }
+            } finally {
+                if (isMounted) {
+                    setIsLoading(false); // Set loading to false regardless of success or failure
+                }
+            }
+        };
+
+        initializeSupabase();
+
+        // Cleanup to prevent memory leaks
+        return () => {
+            isMounted = false;
+        };
+    }, []);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!supabase) {
+            toast.error("Supabase not initialized!", { description: "Please wait or refresh the page." });
+            return;
+        }
 
         try {
             const response = await fetch("/api/auth/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password }),
+                credentials: "include", // Ensure cookies are sent with the request
             });
 
             const data = await response.json();
             if (!response.ok) {
                 console.error("Login error:", data.error);
-                setError(data.error); // Set error for UI display
+                setError(data.error);
                 toast.error("Login failed!", {
                     description: "Something went wrong, please try again!",
                 });
             } else {
-                console.log("User logged in:", data.user);
-                setError(null); // Clear any previous errors
-                toast.success("Login successful!", {
-                    description: "Redirecting you to the dashboard...",
-                });
+                console.log("Login response:", data);
 
+                // Manually set the session using the tokens from the server response
+                if (data.session) {
+                    await supabase.auth.setSession({
+                        access_token: data.session.access_token,
+                        refresh_token: data.session.refresh_token,
+                    });
+                    console.log("Session set manually with tokens:", data.session);
+                }
+
+                // Verify the session
+                const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+                console.log("Session data after login:", sessionData);
+                console.log("Session error after login:", sessionError);
+
+                if (sessionError) throw sessionError;
+                if (!sessionData.session) {
+                    console.warn("No session detected after login, attempting refresh...");
+                    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+                    console.log("Refreshed session data:", refreshData);
+                    console.log("Refreshed session error:", refreshError);
+                    if (refreshError) throw refreshError;
+                    if (!refreshData.session) {
+                        toast.error("Session not detected!", { description: "Please try again or contact support." });
+                        return;
+                    }
+                }
+
+                // Force a page refresh to ensure the navbar updates with the new session
+                toast.success("Login successful!", { description: "Welcome back!" });
                 setTimeout(() => {
-                    router.push("/dashboard");
-                }, 3000);
+                    window.location.href = "/dashboard"; // Full reload to sync state
+                }, 500);
             }
         } catch (err) {
             console.error("Login error:", err);
-            setError("An unexpected error occurred"); // Fixed spelling
+            setError("An unexpected error occurred");
             toast.error("Login failed!", {
                 description: "An unexpected error occurred. Please contact customer support.",
             });
         }
     };
+
+    if (isLoading) {
+        return <div>Loading...</div>; // Show loading state while initializing
+    }
+
+    if (error && !supabase) {
+        return <div>{error}</div>; // Show error if initialization fails
+    }
 
     return (
         <div className={cn("flex flex-col gap-6 w-full md:w-3/5 max-w-3xl mx-auto", className)} {...props}>
@@ -62,9 +135,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                         <div className="flex flex-col gap-6">
                             <div className="flex flex-col items-center text-center">
                                 <h1 className="text-2xl font-bold">Welcome back</h1>
-                                <p className="text-balance text-muted-foreground">
-                                    Login to your Progex account
-                                </p>
+                                <p className="text-balance text-muted-foreground">Login to your Progex account</p>
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="email">Email</Label>
@@ -72,33 +143,29 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                                     id="email"
                                     type="email"
                                     placeholder="m@example.com"
-                                    value={email} // Bind value to state
-                                    onChange={(e) => setEmail(e.target.value)} // Fixed onChange
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
                                     required
                                 />
                             </div>
                             <div className="grid gap-2">
                                 <div className="flex items-center">
                                     <Label htmlFor="password">Password</Label>
-                                    <a
-                                        href="#"
-                                        className="ml-auto text-sm underline-offset-2 hover:underline"
-                                    >
+                                    <a href="#" className="ml-auto text-sm underline-offset-2 hover:underline">
                                         Forgot your password?
                                     </a>
                                 </div>
                                 <div className="relative">
-
-
                                     <Input
                                         id="password"
                                         type={showPassword ? "text" : "password"}
-                                        value={password} // Bind value to state
-                                        onChange={(e) => setPassword(e.target.value)} // Fixed onChange
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
                                         required
                                         className="pr-10"
                                     />
-                                    <button type="button"
+                                    <button
+                                        type="button"
                                         className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-200"
                                         onClick={() => setShowPassword(!showPassword)}
                                     >
@@ -129,7 +196,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                             <Button type="submit" className="w-full">
                                 Login
                             </Button>
-                            {error && <p className="text-red-500 text-sm">{error}</p>} {/* Added error display */}
+                            {error && <p className="text-red-500 text-sm">{error}</p>}
                             <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t after:border-border">
                                 <span className="relative z-10 bg-background px-2 text-muted-foreground">
                                     Or continue with

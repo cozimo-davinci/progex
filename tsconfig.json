@@ -49,5 +49,9 @@
   ],
   "exclude": [
     "node_modules"
+  ],
+  "types": [
+    "@supabase/auth-helpers-nextjs",
+    "next"
   ]
 }
