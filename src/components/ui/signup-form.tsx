@@ -14,6 +14,7 @@ export function SignUpForm({ className, ...props }: React.ComponentProps<"div">)
     const [password, setPassword] = useState("");
     const [username, setUsername] = useState("");
     const [error, setError] = useState<string | null>(null);
+    const [showPassword, setShowPassword] = useState(false);
     const router = useRouter();
 
     const handleSignUp = async (e: React.FormEvent) => {
@@ -52,7 +53,7 @@ export function SignUpForm({ className, ...props }: React.ComponentProps<"div">)
     };
 
     return (
-        <div className={cn("flex flex-col gap-6 w-2/4", className)} {...props}>
+        <div className={cn("flex flex-col gap-6 w-full md:w-3/5 max-w-3xl mx-auto", className)} {...props}>
             <Card className="overflow-hidden ">
                 <CardContent className="grid p-0 md:grid-cols-2">
                     <form className="p-6 md:p-8" onSubmit={handleSignUp}>
@@ -79,7 +80,7 @@ export function SignUpForm({ className, ...props }: React.ComponentProps<"div">)
                                 <Input
                                     id="email"
                                     type="email"
-                                    placeholder="m@example.com"
+                                    placeholder="aristotel@gmail.com"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     required
@@ -87,13 +88,44 @@ export function SignUpForm({ className, ...props }: React.ComponentProps<"div">)
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="password">Password</Label>
-                                <Input
-                                    id="password"
-                                    type="password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    required
-                                />
+                                <div className="relative">
+
+
+                                    <Input
+                                        id="password"
+                                        type={showPassword ? "text" : "password"} // Toggle between text and password
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        required
+                                        className="pr-10" // Add padding-right to prevent text overlap with icon
+                                    />
+                                    <button type="button"
+                                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-200"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                    >
+                                        {showPassword ? (
+                                            <svg
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                width="20"
+                                                height="20"
+                                                fill="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" />
+                                            </svg>
+                                        ) : (
+                                            <svg
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                width="20"
+                                                height="20"
+                                                fill="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.54-1.36 2.76-3.15 3.54-5.25C21.37 6.11 17.1 3 12 3c-1.73 0-3.36.44-4.78 1.2l2.16 2.16C10.74 6.13 11.35 7 12 7zM2 4.27l2.28 2.28C2.94 7.91 1.85 9.61 1.06 11.5 2.63 15.89 6.9 19 12 19c1.73 0 3.36-.44 4.78-1.2l2.84 2.84 1.41-1.41L3.41 2.86 2 4.27zm5.11 5.11l1.94 1.94C9.03 11.55 9 11.77 9 12c0 1.66 1.34 3 3 3 .23 0 .45-.03.68-.05l1.94 1.94C13.77 16.97 12.9 17 12 17c-2.76 0-5-2.24-5-5 0-.9.03-1.77.11-2.62z" />
+                                            </svg>
+                                        )}
+                                    </button>
+                                </div>
                             </div>
                             <Button type="submit" className="w-full">
                                 Sign up
@@ -144,13 +176,13 @@ export function SignUpForm({ className, ...props }: React.ComponentProps<"div">)
                             </div>
                         </div>
                     </form>
-                    <div className="relative hidden bg-muted md:block">
+                    <div className="relative hidden bg-muted md:block ">
                         <Image
                             src="/images/login-image.png"
                             alt="Sign up background"
                             layout="fill"
                             objectFit="cover"
-                            className="dark:brightness-[0.2] dark:grayscale"
+                            className="dark:brightness-[0.9] dark:contrast-more:"
                         />
                     </div>
                 </CardContent>
