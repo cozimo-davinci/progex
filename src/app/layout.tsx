@@ -4,6 +4,8 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/ui/theme-provider";
 import { NavigationMenuDemo as Navbar } from "@/components/ui/Navbar";
 import { Toaster } from 'sonner';
+
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -29,6 +31,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
@@ -36,9 +39,12 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <Navbar />
+
           {children}
+
           <Toaster richColors />
         </ThemeProvider>
+
       </body>
     </html>
   );

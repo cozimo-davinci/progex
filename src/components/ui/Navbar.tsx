@@ -19,6 +19,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@components/ui/collapsible";
 import { createSupabaseClient } from "../../../supabaseClient"; // Direct import
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 const components = [
     {
@@ -60,6 +61,7 @@ export function NavigationMenuDemo() {
     const [isLoggedIn, setIsLoggedIn] = React.useState(false);
     const [supabase, setSupabase] = React.useState<ReturnType<typeof createSupabaseClient> | null>(null);
 
+    const router = useRouter();
     // Initialize Supabase client on client side
     React.useEffect(() => {
         try {
@@ -97,7 +99,8 @@ export function NavigationMenuDemo() {
             else setIsLoggedIn(false); // Force update state
             toast.success("Logout successful!", { description: "See you soon!" });
             setTimeout(() => {
-                window.location.href = "/"; // Full reload to sync state
+                // window.location.href = "/"; // Full reload to sync state
+                router.push('/');
             }, 200);
         }
     };
@@ -109,8 +112,8 @@ export function NavigationMenuDemo() {
     return (
         <NavigationMenu
             className={cn(
-                "mt-4 mb-6 w-full max-w-3xl mx-auto border-2 rounded-lg border-black p-2 dark:border-white",
-                "flex flex-col md:flex-row md:items-center md:justify-between"
+                "mt-4 mb-6 w-full max-w-2xl border-2 rounded-lg border-black p-2 dark:border-white",
+                "flex flex-col md:flex-row md:items-center md:justify-between h-12 mx-auto md:ml-96 sm:ml-80"
             )}
         >
             {/* Mobile Menu Toggle */}

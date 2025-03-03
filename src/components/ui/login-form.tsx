@@ -107,7 +107,8 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                 // Force a page refresh to ensure the navbar updates with the new session
                 toast.success("Login successful!", { description: "Welcome back!" });
                 setTimeout(() => {
-                    window.location.href = "/dashboard"; // Full reload to sync state
+                    // window.location.href = "/dashboard"; // Full reload to sync state
+                    router.push('/dashboard');
                 }, 500);
             }
         } catch (err) {

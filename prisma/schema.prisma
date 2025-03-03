@@ -11,12 +11,26 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  
 }
+
+enum Status {
+  IN_PROGRESS
+  PROCESSING
+  APPROVED
+  REJECTED
+}
+
+
 model JobApplication {
   id        String   @id @default(uuid())
   userId    String
   jobTitle  String
   company   String
-  status    String
-  appliedAt DateTime
+  position  String
+  status    Status
+  link      String
+  applied_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
 }
