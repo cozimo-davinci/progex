@@ -30,7 +30,7 @@ model JobApplication {
   position  String
   status    Status
   link      String
-  applied_at DateTime @default(now())
+  applied_at DateTime?
   updated_at DateTime @updatedAt
 
 }

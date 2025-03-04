@@ -96,28 +96,55 @@ const Dashboard = () => {
     return (
         <div className="p-4">
             <h1 className="text-2xl font-bold mb-4 text-white">Dashboard</h1>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogTrigger asChild>
-                    <Button
-                        className="text-white border-white border-2 rounded-md mb-4 hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
-                    >
-                        Add Application
-                    </Button>
-                </DialogTrigger>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Add New Application</DialogTitle>
-                    </DialogHeader>
-                    {userId && (
-                        <ApplicationForm
-                            userId={userId}
-                            onApplicationAdded={handleApplicationAdded}
-                            onClose={() => setIsDialogOpen(false)}
-                        />
-                    )}
-                </DialogContent>
-            </Dialog>
+            <div className="flex justify-start">
+                <div>
+                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Button
+                                className="text-white border-white border-2 rounded-md mb-4 hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
+                            >
+                                Add Application
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Add New Application</DialogTitle>
+                            </DialogHeader>
+                            {userId && (
+                                <ApplicationForm
+                                    userId={userId}
+                                    onApplicationAdded={handleApplicationAdded}
+                                    onClose={() => setIsDialogOpen(false)}
+                                />
+                            )}
+                        </DialogContent>
+                    </Dialog>
+                </div>
+                <div className="ml-2">
+                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Button
+                                className="text-white border-white border-2 rounded-md mb-4 hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
+                            >
+                                AI Application
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Add New Application</DialogTitle>
+                            </DialogHeader>
+                            {userId && (
+                                <ApplicationForm
+                                    userId={userId}
+                                    onApplicationAdded={handleApplicationAdded}
+                                    onClose={() => setIsDialogOpen(false)}
+                                />
+                            )}
+                        </DialogContent>
+                    </Dialog>
+                </div>
 
+            </div>
             <DataTable columns={columns} data={jobApplications} />
         </div>
     );

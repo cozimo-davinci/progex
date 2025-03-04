@@ -26,8 +26,8 @@ export type Application = {
     position: string;
     status: "IN_PROGRESS" | "PROCESSING" | "APPROVED" | "REJECTED";
     link: string;
-    applied_at: string;
-    updated_at: string;
+    applied_at: string | null; // Updated to allow null
+    updated_at: string | null; // Updated to allow null (in case not yet updated)
 };
 
 export const columns: ColumnDef<Application>[] = [
@@ -93,7 +93,7 @@ export const columns: ColumnDef<Application>[] = [
                 REJECTED: "text-red-500",
             };
             return (
-                <div className={`text-center text-lg font-bold ${statusStyles[status as keyof typeof statusStyles] || ""}`}>
+                <div className={`text-start text-lg font-bold ${statusStyles[status as keyof typeof statusStyles] || ""}`}>
                     {status === "IN_PROGRESS"
                         ? "In Progress"
                         : status === "PROCESSING"
@@ -116,8 +116,9 @@ export const columns: ColumnDef<Application>[] = [
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-500 underline hover:text-blue-700"
+                title={row.original.link}
             >
-                {row.original.link}
+                Job Posting
             </a>
         ),
     },
@@ -125,7 +126,8 @@ export const columns: ColumnDef<Application>[] = [
         accessorKey: "applied_at",
         header: "Applied At",
         cell: ({ row }) => {
-            const date = parseISO(row.original.applied_at);
+            const date = row.original.applied_at ? parseISO(row.original.applied_at) : null;
+            if (!date) return "Not set";
             const formattedDate = format(date, "MMMM d, yyyy");
             const formattedTime = format(date, "h:mm a");
             return `${formattedDate} at ${formattedTime}`;
@@ -135,7 +137,8 @@ export const columns: ColumnDef<Application>[] = [
         accessorKey: "updated_at",
         header: "Updated At",
         cell: ({ row }) => {
-            const date = parseISO(row.original.updated_at);
+            const date = row.original.updated_at ? parseISO(row.original.updated_at) : null;
+            if (!date) return "Not set";
             const formattedDate = format(date, "MMMM d, yyyy");
             const formattedTime = format(date, "h:mm a");
             return `${formattedDate} at ${formattedTime}`;
@@ -145,7 +148,8 @@ export const columns: ColumnDef<Application>[] = [
         id: "actions",
         cell: ({ row }) => {
             const application = row.original;
-            const [isDialogOpen, setIsDialogOpen] = React.useState(false);
+            const [isUpdateDialogOpen, setUpdateDialogOpen] = React.useState(false);
+            const [isViewDialogOpen, setViewDialogOpen] = React.useState(false);
 
             const handleUpdateApplication = async (updatedData: Partial<Application>) => {
                 try {
@@ -161,7 +165,7 @@ export const columns: ColumnDef<Application>[] = [
 
                     const updatedApplication: Application = await response.json();
                     // toast.success("Application updated successfully!");
-                    setIsDialogOpen(false); // Close dialog on success
+                    setUpdateDialogOpen(false);
                     window.dispatchEvent(new CustomEvent("applicationUpdated", { detail: updatedApplication }));
                 } catch (error) {
                     console.error("Error updating application:", error);
@@ -169,17 +173,17 @@ export const columns: ColumnDef<Application>[] = [
                 }
             };
 
-            // Prevent immediate closure by ensuring the dialog state is controlled
-            const handleMenuItemClick = (e: React.MouseEvent) => {
+            const handleMenuItemClick = (e: React.MouseEvent, action: "update" | "view") => {
                 e.preventDefault();
                 e.stopPropagation();
-                setIsDialogOpen(true);
+                if (action === "update") setUpdateDialogOpen(true);
+                if (action === "view") setViewDialogOpen(true);
             };
 
             const handleCopy = () => {
-                navigator.clipboard.writeText(application.id),
-                    toast.success("Application ID copied to clipboard!")
-            }
+                navigator.clipboard.writeText(application.id);
+                toast.success("Application ID copied to clipboard!");
+            };
 
             return (
                 <DropdownMenu>
@@ -191,17 +195,17 @@ export const columns: ColumnDef<Application>[] = [
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem
-                            onClick={handleCopy}
-                        >
+                        <DropdownMenuItem onClick={handleCopy}>
                             Copy application ID
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={handleMenuItemClick}>
+                        <DropdownMenuItem onClick={(e) => handleMenuItemClick(e, "update")}>
                             Update Application
                         </DropdownMenuItem>
-                        <DropdownMenuItem>View company</DropdownMenuItem>
-                        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                        <DropdownMenuItem onClick={(e) => handleMenuItemClick(e, "view")}>
+                            View Application
+                        </DropdownMenuItem>
+                        <Dialog open={isUpdateDialogOpen} onOpenChange={setUpdateDialogOpen}>
                             <DialogContent>
                                 <DialogHeader>
                                     <DialogTitle>Update Application</DialogTitle>
@@ -209,8 +213,70 @@ export const columns: ColumnDef<Application>[] = [
                                 <ApplicationForm
                                     initialData={application}
                                     onUpdate={handleUpdateApplication}
-                                    onClose={() => setIsDialogOpen(false)}
+                                    onClose={() => setUpdateDialogOpen(false)}
                                 />
+                            </DialogContent>
+                        </Dialog>
+                        <Dialog open={isViewDialogOpen} onOpenChange={setViewDialogOpen}>
+                            <DialogContent className="max-w-md">
+                                <DialogHeader>
+                                    <DialogTitle>Application Details</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4 py-4">
+                                    <p className="text-sm font-medium text-slate-100">
+                                        <span className="font-bold">Job Title:</span> {application.jobTitle}
+                                    </p>
+                                    <p className="text-sm font-medium text-slate-100">
+                                        <span className="font-bold">Company:</span> {application.company}
+                                    </p>
+                                    <p className="text-sm font-medium text-slate-100">
+                                        <span className="font-bold">Position:</span> {application.position}
+                                    </p>
+                                    <p className="text-sm font-medium text-slate-100">
+                                        <span className="font-bold">Status:</span>{" "}
+                                        {application.status === "IN_PROGRESS"
+                                            ? "In Progress"
+                                            : application.status === "PROCESSING"
+                                                ? "Processing"
+                                                : application.status === "APPROVED"
+                                                    ? "Approved"
+                                                    : application.status === "REJECTED"
+                                                        ? "Rejected"
+                                                        : "Unknown"}
+                                    </p>
+                                    <p className="text-sm font-medium text-slate-100">
+                                        <span className="font-bold">Link:</span>{" "}
+                                        <a
+                                            href={application.link}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-500 underline hover:text-blue-700"
+                                        >
+                                            Job Posting
+                                        </a>
+                                    </p>
+                                    <p className="text-sm font-medium text-slate-100">
+                                        <span className="font-bold">Applied At:</span>{" "}
+                                        {application.applied_at
+                                            ? `${format(parseISO(application.applied_at), "MMMM d, yyyy")} at ${format(
+                                                parseISO(application.applied_at),
+                                                "h:mm a"
+                                            )}`
+                                            : "Not set"}
+                                    </p>
+                                    <p className="text-sm font-medium text-slate-100">
+                                        <span className="font-bold">Updated At:</span>{" "}
+                                        {application.updated_at
+                                            ? `${format(parseISO(application.updated_at), "MMMM d, yyyy")} at ${format(
+                                                parseISO(application.updated_at),
+                                                "h:mm a"
+                                            )}`
+                                            : "Not set"}
+                                    </p>
+                                </div>
+                                <Button variant="outline" onClick={() => setViewDialogOpen(false)}>
+                                    Close
+                                </Button>
                             </DialogContent>
                         </Dialog>
                     </DropdownMenuContent>
