@@ -1,14 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
-import { createSupabaseClient } from "../../../supabaseClient";
+import React, { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner"; // Optional: for success/error notifications
+import { toast } from "sonner";
 
-// Define the Application type
-interface Application {
+export type Application = {
     id: string;
     userId: string;
     jobTitle: string;
@@ -18,101 +16,110 @@ interface Application {
     link: string;
     applied_at: string;
     updated_at: string;
-}
+};
 
 interface ApplicationFormProps {
-    userId: string;
-    onApplicationAdded: (newApplication: Application) => void;
+    initialData?: Partial<Application>; // Optional initial data for updates
+    userId?: string; // Optional for new applications
+    onUpdate?: (data: Partial<Application>) => void; // Callback for updates
+    onApplicationAdded?: (newApplication: Application) => void; // Callback for new applications
+    onClose: () => void;
 }
 
-const ApplicationForm: React.FC<ApplicationFormProps> = ({ userId, onApplicationAdded }) => {
-    const [newApplication, setNewApplication] = useState({
-        jobTitle: "",
-        company: "",
-        position: "",
-        status: "IN_PROGRESS" as const,
-        link: "",
-    });
+const ApplicationForm: React.FC<ApplicationFormProps> = ({
+    initialData,
+    userId,
+    onUpdate,
+    onApplicationAdded,
+    onClose,
+}) => {
+    const [formData, setFormData] = useState<Partial<Application>>(
+        initialData || {
+            jobTitle: "",
+            company: "",
+            position: "",
+            status: "IN_PROGRESS",
+            link: "",
+        }
+    );
 
-    // Handle input changes
+    useEffect(() => {
+        if (initialData) {
+            setFormData(initialData);
+        }
+    }, [initialData]);
+
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
-        setNewApplication((prev) => ({ ...prev, [name]: value }));
+        setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
-    // Handle select changes
     const handleSelectChange = (value: string) => {
-        setNewApplication((prev) => ({
+        setFormData((prev) => ({
             ...prev,
             status: value as "IN_PROGRESS" | "PROCESSING" | "APPROVED" | "REJECTED",
         }));
     };
 
-    // Handle form submission
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            const supabase = createSupabaseClient();
-            const { data, error } = await supabase
-                .from("JobApplication")
-                .insert([
-                    {
-                        userId,
-                        jobTitle: newApplication.jobTitle,
-                        company: newApplication.company,
-                        position: newApplication.position,
-                        status: newApplication.status,
-                        link: newApplication.link,
-                    },
-                ])
-                .select();
+            if (onUpdate && initialData?.id) {
+                // Update existing application
+                await onUpdate(formData);
+            } else if (onApplicationAdded && userId) {
+                // Add new application (via Supabase or another endpoint)
+                const response = await fetch("/api/applications", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ...formData, userId }),
+                });
 
-            if (error) throw error;
+                if (!response.ok) throw new Error("Failed to add application");
+                const data: Application = await response.json();
+                onApplicationAdded(data);
+            }
 
-            // Pass the new application to the parent component
-            onApplicationAdded(data![0] as Application);
-
-            // Reset the form
-            setNewApplication({
-                jobTitle: "",
-                company: "",
-                position: "",
-                status: "IN_PROGRESS",
-                link: "",
-            });
-
-            // Optional: Show success notification
-            toast.success("Application added successfully!");
-        } catch (err) {
-            console.error("Error adding application:", err);
-            toast.error("Failed to add application"); // Optional: Error notification
+            onClose();
+            if (initialData?.id) {
+                toast.success("Application updated successfully!");
+            } else {
+                toast.success("Application added successfully!");
+            }
+            // toast.success("Action completed successfully!");
+        } catch (error) {
+            console.error("Error:", error);
+            toast.error("Failed to complete action");
         }
     };
 
     return (
-        <form onSubmit={handleSubmit} className="mb-6 space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
             <Input
                 name="jobTitle"
-                value={newApplication.jobTitle}
+                value={formData.jobTitle || ""}
                 onChange={handleInputChange}
                 placeholder="Job Title"
                 required
             />
             <Input
                 name="company"
-                value={newApplication.company}
+                value={formData.company || ""}
                 onChange={handleInputChange}
                 placeholder="Company"
                 required
             />
             <Input
                 name="position"
-                value={newApplication.position}
+                value={formData.position || ""}
                 onChange={handleInputChange}
                 placeholder="Position"
                 required
             />
-            <Select value={newApplication.status} onValueChange={handleSelectChange}>
+            <Select
+                value={formData.status || "IN_PROGRESS"}
+                onValueChange={handleSelectChange}
+            >
                 <SelectTrigger>
                     <SelectValue placeholder="Select status" />
                 </SelectTrigger>
@@ -125,13 +132,13 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({ userId, onApplication
             </Select>
             <Input
                 name="link"
-                value={newApplication.link}
+                value={formData.link || ""}
                 onChange={handleInputChange}
                 placeholder="Link"
                 required
             />
             <Button type="submit" className="w-full">
-                Add Application
+                {initialData?.id ? "Update Application" : "Add Application"}
             </Button>
         </form>
     );

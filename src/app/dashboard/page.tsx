@@ -5,6 +5,14 @@ import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "../../../supabaseClient";
 import { DataTable } from "./data-table";
 import { columns } from "./columns";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
 import ApplicationForm from "./application-form";
 
 // Define the Application type (consistent with columns file)
@@ -25,6 +33,7 @@ const Dashboard = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
     const router = useRouter();
 
     useEffect(() => {
@@ -39,7 +48,7 @@ const Dashboard = () => {
                 }
 
                 const userId = session.user.id;
-                setUserId(userId); // Store userId for the form
+                setUserId(userId);
 
                 const response = await fetch(`/api/applications?userId=${userId}`);
                 if (!response.ok) {
@@ -56,6 +65,19 @@ const Dashboard = () => {
         };
 
         fetchData();
+
+        // Listen for application updates
+        const handleApplicationUpdated = (event: Event) => {
+            const updatedApplication = (event as CustomEvent).detail as Application;
+            setJobApplications((prev) =>
+                prev.map((app) =>
+                    app.id === updatedApplication.id ? updatedApplication : app
+                )
+            );
+        };
+
+        window.addEventListener("applicationUpdated", handleApplicationUpdated);
+        return () => window.removeEventListener("applicationUpdated", handleApplicationUpdated);
     }, [router]);
 
     // Callback to update jobApplications when a new one is added
@@ -73,14 +95,29 @@ const Dashboard = () => {
 
     return (
         <div className="p-4">
-            <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
+            <h1 className="text-2xl font-bold mb-4 text-white">Dashboard</h1>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                    <Button
+                        className="text-white border-white border-2 rounded-md mb-4 hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
+                    >
+                        Add Application
+                    </Button>
+                </DialogTrigger>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Add New Application</DialogTitle>
+                    </DialogHeader>
+                    {userId && (
+                        <ApplicationForm
+                            userId={userId}
+                            onApplicationAdded={handleApplicationAdded}
+                            onClose={() => setIsDialogOpen(false)}
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
 
-            {/* Render the ApplicationForm if userId is available */}
-            {userId && (
-                <ApplicationForm userId={userId} onApplicationAdded={handleApplicationAdded} />
-            )}
-
-            {/* Render the DataTable */}
             <DataTable columns={columns} data={jobApplications} />
         </div>
     );
