@@ -18,6 +18,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import ApplicationForm from "./application-form"; // Adjust path based on your structure
 import { toast } from "sonner";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 export type Application = {
     id: string;
@@ -26,8 +33,8 @@ export type Application = {
     position: string;
     status: "IN_PROGRESS" | "PROCESSING" | "APPROVED" | "REJECTED";
     link: string;
-    applied_at: string | null; // Updated to allow null
-    updated_at: string | null; // Updated to allow null (in case not yet updated)
+    applied_at: string | null;
+    updated_at: string | null;
 };
 
 export const columns: ColumnDef<Application>[] = [
@@ -55,7 +62,11 @@ export const columns: ColumnDef<Application>[] = [
     },
     {
         accessorKey: "jobTitle",
-        header: "Job Title",
+        header: () => (
+            <div className="text-slate-900 dark:text-neutral-300">
+                Job Title
+            </div>
+        ),
     },
     {
         accessorKey: "company",
@@ -63,6 +74,7 @@ export const columns: ColumnDef<Application>[] = [
             <Button
                 variant="ghost"
                 onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                className="text-slate-900  dark:text-neutral-300"
             >
                 Company
                 <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -71,7 +83,11 @@ export const columns: ColumnDef<Application>[] = [
     },
     {
         accessorKey: "position",
-        header: "Position",
+        header: () => (
+            <div className="text-slate-900  dark:text-neutral-300">
+                Position
+            </div>
+        ),
     },
     {
         accessorKey: "status",
@@ -79,43 +95,89 @@ export const columns: ColumnDef<Application>[] = [
             <Button
                 variant="ghost"
                 onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                className="text-slate-900  dark:text-neutral-300"
             >
                 Status
                 <ArrowUpDown className="ml-2 h-4 w-4" />
             </Button>
         ),
         cell: ({ row }) => {
-            const status = row.getValue("status");
+            const status = row.getValue("status") as Application["status"];
             const statusStyles = {
-                IN_PROGRESS: "text-yellow-500",
-                PROCESSING: "text-blue-500",
-                APPROVED: "text-green-500",
-                REJECTED: "text-red-500",
+                IN_PROGRESS: "text-yellow-500 font-bold text-lg",
+                PROCESSING: "text-blue-500 font-bold text-lg",
+                APPROVED: "text-green-500 font-bold text-lg",
+                REJECTED: "text-red-500 font-bold text-lg",
             };
+
+            // Define status options for the dropdown
+            const statusOptions = [
+                { value: "IN_PROGRESS", label: "In Progress" },
+                { value: "PROCESSING", label: "Processing" },
+                { value: "APPROVED", label: "Approved" },
+                { value: "REJECTED", label: "Rejected" },
+            ];
+
+            // Handle status change
+            const handleStatusChange = async (newStatus: string) => {
+                try {
+                    const updatedData = { status: newStatus as Application["status"] };
+                    const response = await fetch(`/api/applications`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ ...updatedData, id: row.original.id }),
+                    });
+
+                    if (!response.ok) {
+                        throw new Error("Failed to update status");
+                    }
+
+                    const updatedApplication: Application = await response.json();
+                    window.dispatchEvent(
+                        new CustomEvent("applicationUpdated", { detail: updatedApplication })
+                    );
+                    toast.success("Status updated successfully!");
+                } catch (error) {
+                    console.error("Error updating status:", error);
+                    toast.error("Failed to update status");
+                }
+            };
+
             return (
-                <div className={`text-start text-lg font-bold ${statusStyles[status as keyof typeof statusStyles] || ""}`}>
-                    {status === "IN_PROGRESS"
-                        ? "In Progress"
-                        : status === "PROCESSING"
-                            ? "Processing"
-                            : status === "APPROVED"
-                                ? "Approved"
-                                : status === "REJECTED"
-                                    ? "Rejected"
-                                    : "Unknown"}
-                </div>
+                <Select
+                    value={status}
+                    onValueChange={handleStatusChange}
+                    className={`w-full text-start text-lg font-bold ${statusStyles[status] || ""}`}
+                >
+                    <SelectTrigger className="w-full bg-stone-800 dark:bg-black dark:border-white dark:border-2 border-black border-2 focus:ring-0">
+                        <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent className="border-white">
+                        {statusOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value} className="dark:border-b-white dark:border-b-2">
+                                <span className={statusStyles[option.value as Application["status"]] || ""}>
+                                    {option.label}
+                                </span>
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             );
         },
     },
     {
         accessorKey: "link",
-        header: "Link",
+        header: () => (
+            <div className="text-slate-900  dark:text-neutral-300">
+                Link
+            </div>
+        ),
         cell: ({ row }) => (
             <a
                 href={row.original.link}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-500 underline hover:text-blue-700"
+                className="dark:text-blue-500 underline dark:hover:text-blue-700 text-black hover:text-neutral-800"
                 title={row.original.link}
             >
                 Job Posting
@@ -124,7 +186,11 @@ export const columns: ColumnDef<Application>[] = [
     },
     {
         accessorKey: "applied_at",
-        header: "Applied At",
+        header: () => (
+            <div className="text-slate-900  dark:text-neutral-300">
+                Applied At
+            </div>
+        ),
         cell: ({ row }) => {
             const date = row.original.applied_at ? parseISO(row.original.applied_at) : null;
             if (!date) return "Not set";
@@ -135,7 +201,11 @@ export const columns: ColumnDef<Application>[] = [
     },
     {
         accessorKey: "updated_at",
-        header: "Updated At",
+        header: () => (
+            <div className="text-slate-900  dark:text-neutral-300">
+                Updated At
+            </div>
+        ),
         cell: ({ row }) => {
             const date = row.original.updated_at ? parseISO(row.original.updated_at) : null;
             if (!date) return "Not set";
@@ -164,9 +234,10 @@ export const columns: ColumnDef<Application>[] = [
                     }
 
                     const updatedApplication: Application = await response.json();
-                    // toast.success("Application updated successfully!");
                     setUpdateDialogOpen(false);
-                    window.dispatchEvent(new CustomEvent("applicationUpdated", { detail: updatedApplication }));
+                    window.dispatchEvent(
+                        new CustomEvent("applicationUpdated", { detail: updatedApplication })
+                    );
                 } catch (error) {
                     console.error("Error updating application:", error);
                     toast.error("Failed to update application");

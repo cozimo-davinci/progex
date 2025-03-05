@@ -14,8 +14,8 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog";
 import ApplicationForm from "./application-form";
+import URLForm from "./url-form";
 
-// Define the Application type (consistent with columns file)
 interface Application {
     id: string;
     userId: string;
@@ -24,8 +24,8 @@ interface Application {
     position: string;
     status: "IN_PROGRESS" | "PROCESSING" | "APPROVED" | "REJECTED";
     link: string;
-    applied_at: string;
-    updated_at: string;
+    applied_at: string | null;
+    updated_at: string | null;
 }
 
 const Dashboard = () => {
@@ -33,7 +33,8 @@ const Dashboard = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
-    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [isAddDialogOpen, setIsAddDialogOpen] = useState(false); // For ApplicationForm
+    const [isAIDialogOpen, setIsAIDialogOpen] = useState(false);   // For URLForm
     const router = useRouter();
 
     useEffect(() => {
@@ -66,7 +67,6 @@ const Dashboard = () => {
 
         fetchData();
 
-        // Listen for application updates
         const handleApplicationUpdated = (event: Event) => {
             const updatedApplication = (event as CustomEvent).detail as Application;
             setJobApplications((prev) =>
@@ -80,7 +80,6 @@ const Dashboard = () => {
         return () => window.removeEventListener("applicationUpdated", handleApplicationUpdated);
     }, [router]);
 
-    // Callback to update jobApplications when a new one is added
     const handleApplicationAdded = (newApplication: Application) => {
         setJobApplications((prev) => [...prev, newApplication]);
     };
@@ -96,54 +95,49 @@ const Dashboard = () => {
     return (
         <div className="p-4">
             <h1 className="text-2xl font-bold mb-4 text-white">Dashboard</h1>
-            <div className="flex justify-start">
-                <div>
-                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                        <DialogTrigger asChild>
-                            <Button
-                                className="text-white border-white border-2 rounded-md mb-4 hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
-                            >
-                                Add Application
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                            <DialogHeader>
-                                <DialogTitle>Add New Application</DialogTitle>
-                            </DialogHeader>
-                            {userId && (
-                                <ApplicationForm
-                                    userId={userId}
-                                    onApplicationAdded={handleApplicationAdded}
-                                    onClose={() => setIsDialogOpen(false)}
-                                />
-                            )}
-                        </DialogContent>
-                    </Dialog>
-                </div>
-                <div className="ml-2">
-                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                        <DialogTrigger asChild>
-                            <Button
-                                className="text-white border-white border-2 rounded-md mb-4 hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
-                            >
-                                AI Application
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                            <DialogHeader>
-                                <DialogTitle>Add New Application</DialogTitle>
-                            </DialogHeader>
-                            {userId && (
-                                <ApplicationForm
-                                    userId={userId}
-                                    onApplicationAdded={handleApplicationAdded}
-                                    onClose={() => setIsDialogOpen(false)}
-                                />
-                            )}
-                        </DialogContent>
-                    </Dialog>
-                </div>
-
+            <div className="flex justify-start gap-2">
+                <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                    <DialogTrigger asChild>
+                        <Button
+                            className="text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
+                        >
+                            Add Application
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Add New Application</DialogTitle>
+                        </DialogHeader>
+                        {userId && (
+                            <ApplicationForm
+                                userId={userId}
+                                onApplicationAdded={handleApplicationAdded}
+                                onClose={() => setIsAddDialogOpen(false)}
+                            />
+                        )}
+                    </DialogContent>
+                </Dialog>
+                <Dialog open={isAIDialogOpen} onOpenChange={setIsAIDialogOpen}>
+                    <DialogTrigger asChild>
+                        <Button
+                            className="text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
+                        >
+                            AI Application
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>AI Application</DialogTitle>
+                        </DialogHeader>
+                        {userId && (
+                            <URLForm
+                                userId={userId}
+                                onApplicationAdded={handleApplicationAdded}
+                                onClose={() => setIsAIDialogOpen(false)}
+                            />
+                        )}
+                    </DialogContent>
+                </Dialog>
             </div>
             <DataTable columns={columns} data={jobApplications} />
         </div>
