@@ -35,25 +35,29 @@ const URLForm: React.FC<URLFormProps> = ({ userId, onApplicationAdded, onClose }
         setError(null);
 
         try {
-            // Send the URL to the Grok API endpoint
-            const grokResponse = await fetch("/api/grok", {
+            // Send the URL to the Cohere API endpoint
+            const cohereResponse = await fetch("/api/cohere", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ url }),
             });
 
-            if (!grokResponse.ok) {
-                throw new Error("Failed to parse URL with Grok API");
+            if (!cohereResponse.ok) {
+                throw new Error("Failed to parse URL with Cohere API");
             }
 
-            const parsedData = await grokResponse.json();
+            const parsedData = await cohereResponse.json();
 
-            // Construct the application data with parsed fields
+            // Construct the application data with parsed fields and additional required fields
             const applicationData = {
-                ...parsedData,
+                jobTitle: parsedData.jobTitle || "Unknown",
+                company: parsedData.company || "Unknown",
+                position: parsedData.position || "Unknown",
+                link: url, // Use the input URL as the link
                 userId,
                 status: "IN_PROGRESS" as const, // Default status
-                applied_at: new Date().toISOString(), // Current time for AI-assisted application
+                applied_at: new Date().toISOString(), // Current time
+                updated_at: new Date().toISOString(), // Current time
             };
 
             // Save the application to the database
@@ -86,7 +90,7 @@ const URLForm: React.FC<URLFormProps> = ({ userId, onApplicationAdded, onClose }
                     id="url"
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
-                    placeholder="Enter URL"
+                    placeholder="Enter job posting URL"
                     required
                 />
             </div>
