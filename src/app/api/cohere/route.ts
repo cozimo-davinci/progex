@@ -1,5 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fetch from 'node-fetch';
+import { redis } from '@/app/lib/redis';
+
+// Define the interface for Mistral's Chat Completions response
+interface MistralResponse {
+    id: string;
+    object: string;
+    created: number;
+    model: string;
+    choices: Array<{
+        index: number;
+        message: {
+            role: string;
+            content: string;
+        };
+        finish_reason: 'stop' | 'length' | 'content_filter' | null;
+    }>;
+    usage: {
+        prompt_tokens: number;
+        completion_tokens: number;
+        total_tokens: number;
+    };
+}
 
 export async function POST(request: NextRequest) {
     try {
@@ -8,134 +30,117 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'URL is required' }, { status: 400 });
         }
 
-        // Fetch rendered content using ScrapingBee with optimized parameters
-        const params = new URLSearchParams({
-            api_key: process.env.SCRAPINGBEE_API_KEY || '',
-            url,
-            render_js: 'true',
-            wait: '5000',
-            extract_rules: JSON.stringify({
-                text: "body",
-            }),
-        });
+        const cacheKey = `scrapingbee:${url}`;
+        const cachedData = await redis.get(cacheKey);
+        let data;
+        if (cachedData) {
+            console.log('Cache hit for URL:', url);
+            data = typeof cachedData === 'string' ? JSON.parse(cachedData) : cachedData;
+        } else {
+            console.log('Cache miss for URL:', url);
+            const params = new URLSearchParams({
+                api_key: process.env.SCRAPINGBEE_API_KEY || '',
+                url,
+                render_js: 'true',
+                wait: '5000',
+                extract_rules: JSON.stringify({ text: 'body' }), // Target job description
+            });
 
-        const scrapingBeeResponse = await fetch(`https://app.scrapingbee.com/api/v1?${params.toString()}`, {
-            method: 'GET',
-        });
-        if (!scrapingBeeResponse.ok) {
-            const errorText = await scrapingBeeResponse.text();
-            console.error('ScrapingBee Error:', scrapingBeeResponse.status, errorText);
-            throw new Error(`Failed to fetch URL content via ScrapingBee: ${scrapingBeeResponse.status} ${errorText}`);
+            const scrapingBeeResponse = await fetch(`https://app.scrapingbee.com/api/v1?${params.toString()}`, {
+                method: 'GET',
+            });
+            if (!scrapingBeeResponse.ok) {
+                const errorText = await scrapingBeeResponse.text();
+                console.error('ScrapingBee Error:', scrapingBeeResponse.status, errorText);
+                throw new Error(`Failed to fetch URL content via ScrapingBee: ${scrapingBeeResponse.status} ${errorText}`);
+            }
+            data = await scrapingBeeResponse.json();
+            await redis.set(cacheKey, JSON.stringify(data), { ex: 86400 });
         }
-        const data = await scrapingBeeResponse.json();
-        console.log('ScrapingBee Response:', data);
-        let textContent = (data.text && Array.isArray(data.text) ? data.text.join(' ') : data.text) || '';
 
-        // Clean extraneous text
+        let textContent = (data.text && Array.isArray(data.text) ? data.text.join(' ') : data.text) || '';
         textContent = textContent
             .replace(/You need to enable JavaScript to run this app\./i, '')
-            .replace(/This site is protected by reCAPTCHA and the Google Privacy Policy and Terms of Service apply\. Powered by Ashby Privacy Policy Security Vulnerability Disclosure/i, '')
+            .replace(/This site is protected by reCAPTCHA.*$/i, '')
             .trim();
 
-        // Validate text content
+        let requestBody;
         if (!textContent || textContent.length < 10) {
             console.warn('Insufficient content after cleaning, using fallback prompt');
-            const fallbackPrompt = `Extract the job title, company, and position from ${url}. Return {\"jobTitle\": \"Unknown\", \"company\": \"Unknown\", \"position\": \"Unknown\"} if insufficient.`;
-            const cohereResponse = await fetch('https://api.cohere.ai/v1/chat', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${process.env.COHERE_API_KEY}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    model: 'command-r-plus',
-                    messages: [
-                        { role: 'system', content: 'Return responses as JSON objects only.' },
-                        { role: 'user', content: fallbackPrompt },
-                    ],
-                    max_tokens: 4096,
-                    temperature: 0.3,
-                    tools: [], // Dummy tools array to satisfy potential tool expectation
-                }),
-            });
-            if (!cohereResponse.ok) {
-                const errorText = await cohereResponse.text();
-                console.error('Cohere API Error (Fallback):', cohereResponse.status, errorText);
-                throw new Error(`Failed to fetch from Cohere API (Fallback): ${cohereResponse.status} ${errorText}`);
+            const fallbackPrompt = `Extract the job title, company, and position from the URL: ${url}. Since content is unavailable, return {"jobTitle": "Unknown", "company": "Unknown", "position": "Unknown"}.`;
+            requestBody = {
+                model: 'mistral-large-latest',
+                messages: [
+                    { role: 'system', content: 'You are a helpful assistant that extracts information from job postings and returns it in JSON format.' },
+                    { role: 'user', content: fallbackPrompt },
+                ],
+                max_tokens: 4096,
+                temperature: 0.3,
+            };
+        } else {
+            const maxLength = 18000;
+            const cleanedText = textContent
+                .replace(/Location\s+\w+|Employment Type\s+\w+\s+\w+|Department\s+\w+|Overview|Application/g, '') // Remove metadata and tab titles
+                .replace(/[^\w\s.,!?']/g, '')
+                .replace(/\s+/g, ' ')
+                .replace(/\.+/g, '.')
+                .trim();
+            if (!cleanedText) {
+                throw new Error('Extracted content is empty after cleaning');
             }
-            const cohereData = await cohereResponse.json();
-            console.log('Cohere Full Response (Fallback):', cohereData);
-            const extractedText = cohereData.text;
-            let extractedData;
-            try {
-                extractedData = JSON.parse(extractedText);
-            } catch (parseError) {
-                console.error('Failed to parse Cohere API response (Fallback):', parseError, 'Raw text:', extractedText);
-                extractedData = { jobTitle: "Unknown", company: "Unknown", position: "Unknown" };
-            }
-            return NextResponse.json(extractedData);
+            const truncatedText = cleanedText.slice(0, maxLength);
+            console.log('Checking the truncated text value: ==>', truncatedText);
+            const prompt = `Here is a job description: ${truncatedText}. Extract the job title, company, and position. If the position is not explicitly mentioned in the description, derive it from the job title by taking the primary role and including any seniority level (e.g., 'Senior', 'Junior', 'Mid-Level') while ignoring non-seniority qualifiers like 'New Grad', 'Trainee', or similar. Examples: 'Senior Software Engineer' → position 'Senior Software Engineer'; 'Marketing Manager, Junior' → position 'Junior Marketing Manager'; 'Software Engineer, New Grad' → position 'Software Engineer'; 'Data Analyst, Trainee' → position 'Data Analyst', but still keep if it's Intern, for example: Marketing Manager, Intern -> 'Intern Marketing Manager'; Data Engineer Internship -> 'Intern Data Engineer'. Return a JSON object: {"jobTitle": "<string>", "company": "<string>", "position": "<string>"}. If any field cannot be determined, use "Unknown".`;
+            requestBody = {
+                model: 'mistral-large-latest',
+                messages: [
+                    { role: 'system', content: 'You are a helpful assistant that extracts information from job postings and returns it in JSON format.' },
+                    { role: 'user', content: prompt },
+                ],
+                max_tokens: 4096,
+                temperature: 0.3,
+            };
         }
 
-        // Clean and truncate text to fit API limits
-        const maxLength = 7000;
-        const cleanedText = textContent.replace(/[^\w\s.,!?']/g, '').trim();
-        const truncatedText = cleanedText.slice(0, maxLength);
-        const prompt = `Extract job title, company, and position. Return {\"jobTitle\": \"<string>\", \"company\": \"<string>\", \"position\": \"<string>\"} with \"Unknown\" if not found. Text:\n\n${truncatedText}`;
+        console.log('Sending Mistral Request:', JSON.stringify(requestBody, null, 2));
 
-        // Log the request body for debugging
-        const requestBody = {
-            model: 'command-r-plus',
-            messages: [
-                { role: 'system', content: 'Return responses as JSON objects only.' },
-                { role: 'user', content: prompt },
-            ],
-            max_tokens: 4096,
-            temperature: 0.3,
-            tools: [], // Dummy tools array
-        };
-        console.log('Cohere Request Body:', requestBody);
-
-        // Make request to Cohere API
-        const cohereResponse = await fetch('https://api.cohere.ai/v1/chat', {
+        const mistralResponse = await fetch('https://api.mistral.ai/v1/chat/completions', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${process.env.COHERE_API_KEY}`,
+                Authorization: `Bearer ${process.env.MISTRAL_API_KEY}`,
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify(requestBody),
         });
 
-        if (!cohereResponse.ok) {
-            const errorText = await cohereResponse.text();
-            console.error('Cohere API Error:', cohereResponse.status, errorText);
-            throw new Error(`Failed to fetch from Cohere API: ${cohereResponse.status} ${errorText}`);
+        if (!mistralResponse.ok) {
+            const errorText = await mistralResponse.text();
+            console.error('Mistral API Error:', mistralResponse.status, errorText);
+            throw new Error(`Failed to fetch from Mistral API: ${mistralResponse.status} ${errorText}`);
         }
 
-        const cohereData = await cohereResponse.json();
-        console.log('Cohere Full Response:', cohereData);
-        const extractedText = cohereData.text;
+        const mistralData = await mistralResponse.json() as MistralResponse;
+        const generatedText = mistralData.choices[0].message.content;
 
+        // Clean the Mistral response to remove Markdown code block syntax
+        const cleanedText = generatedText
+            .replace(/```json/g, '') // Remove ```json
+            .replace(/```/g, '')     // Remove ```
+            .trim();                 // Remove leading/trailing whitespace
+
+        console.log('Mistral Response:', cleanedText);
         let extractedData;
         try {
-            extractedData = JSON.parse(extractedText);
+            extractedData = JSON.parse(cleanedText);
+            console.log('Extracted Data:', extractedData);
         } catch (parseError) {
-            console.error('Failed to parse Cohere API response:', parseError, 'Raw text:', extractedText);
-            const jsonMatch = extractedText.match(/\{.*\}/s);
-            if (jsonMatch) {
-                try {
-                    extractedData = JSON.parse(jsonMatch[0]);
-                } catch (nestedError) {
-                    console.error('Failed to parse nested JSON:', nestedError);
-                    extractedData = { jobTitle: "Unknown", company: "Unknown", position: "Unknown" };
-                }
-            } else {
-                extractedData = { jobTitle: "Unknown", company: "Unknown", position: "Unknown" };
-            }
+            console.error('Failed to parse cleaned Mistral response as JSON:', parseError, 'Cleaned text:', cleanedText);
+            extractedData = { jobTitle: 'Unknown', company: 'Unknown', position: 'Unknown' };
         }
 
         return NextResponse.json(extractedData);
     } catch (error) {
-        console.error('Error in Cohere API route:', error);
+        console.error('Error in Mistral API route:', error);
         return NextResponse.json(
             { error: error instanceof Error ? error.message : 'Internal Server Error' },
             { status: 500 }
