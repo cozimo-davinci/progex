@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { parseISO, format } from "date-fns";
+import { parseISO, format, isValid, parse } from "date-fns";
 import { MoreHorizontal, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -85,10 +85,7 @@ const ActionsCell: React.FC<ActionsCellProps> = ({ application, setJobApplicatio
     };
 
     const confirmDelete = async () => {
-        // Close the dialog immediately
         setDeleteDialogOpen(false);
-
-        // Perform the optimistic update
         setJobApplications((prev) => prev.filter((app) => app.id !== application.id));
 
         try {
@@ -149,9 +146,7 @@ const ActionsCell: React.FC<ActionsCellProps> = ({ application, setJobApplicatio
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                <DropdownMenuItem onClick={handleCopy}>
-                    Copy application ID
-                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleCopy}>Copy application ID</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={(e) => handleMenuItemClick(e, "update")}>
                     Update Application
@@ -285,9 +280,7 @@ export const columns: ColumnDef<Application>[] = [
     {
         accessorKey: "jobTitle",
         header: () => (
-            <div className="text-slate-900 dark:text-neutral-300">
-                Job Title
-            </div>
+            <div className="text-slate-900 dark:text-neutral-300">Job Title</div>
         ),
     },
     {
@@ -306,9 +299,7 @@ export const columns: ColumnDef<Application>[] = [
     {
         accessorKey: "position",
         header: () => (
-            <div className="text-slate-900 dark:text-neutral-300">
-                Position
-            </div>
+            <div className="text-slate-900 dark:text-neutral-300">Position</div>
         ),
     },
     {
@@ -388,9 +379,7 @@ export const columns: ColumnDef<Application>[] = [
     {
         accessorKey: "link",
         header: () => (
-            <div className="text-slate-900 dark:text-neutral-300">
-                Link
-            </div>
+            <div className="text-slate-900 dark:text-neutral-300">Link</div>
         ),
         cell: ({ row }) => (
             <a
@@ -407,9 +396,7 @@ export const columns: ColumnDef<Application>[] = [
     {
         accessorKey: "applied_at",
         header: () => (
-            <div className="text-slate-900 dark:text-neutral-300">
-                Applied At
-            </div>
+            <div className="text-slate-900 dark:text-neutral-300">Applied At</div>
         ),
         cell: ({ row }) => {
             const date = row.original.applied_at ? parseISO(row.original.applied_at) : null;
@@ -418,13 +405,22 @@ export const columns: ColumnDef<Application>[] = [
             const formattedTime = format(date, "h:mm a");
             return `${formattedDate} at ${formattedTime}`;
         },
+        filterFn: (row, columnId, filterValue) => {
+            const rowDate = row.original.applied_at ? parseISO(row.original.applied_at) : null;
+            if (!rowDate || !isValid(rowDate)) return false;
+
+            // Parse the filter value as a date (from the date input, which returns YYYY-MM-DD)
+            const filterDate = filterValue ? parse(filterValue, "yyyy-MM-dd", new Date()) : null;
+            if (!filterDate || !isValid(filterDate)) return true; // Allow all if filter is invalid
+
+            // Compare dates (ignore time for simplicity)
+            return rowDate.toDateString() === filterDate.toDateString();
+        },
     },
     {
         accessorKey: "updated_at",
         header: () => (
-            <div className="text-slate-900 dark:text-neutral-300">
-                Updated At
-            </div>
+            <div className="text-slate-900 dark:text-neutral-300">Updated At</div>
         ),
         cell: ({ row }) => {
             const date = row.original.updated_at ? parseISO(row.original.updated_at) : null;

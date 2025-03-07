@@ -8,6 +8,8 @@ import {
     getSortedRowModel,
     SortingState,
     getPaginationRowModel,
+    ColumnFiltersState,
+    getFilteredRowModel,
 } from "@tanstack/react-table";
 import * as React from "react";
 import {
@@ -19,11 +21,12 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Input } from "@components/ui/input";
 
 interface DataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[];
     data: TData[];
-    meta?: Record<string, unknown>; // Add meta prop with a generic Record type
+    meta?: Record<string, unknown>;
 }
 
 export function DataTable<TData, TValue>({
@@ -33,6 +36,14 @@ export function DataTable<TData, TValue>({
 }: DataTableProps<TData, TValue>) {
     const [sorting, setSorting] = React.useState<SortingState>([]);
     const [rowSelection, setRowSelection] = React.useState({});
+    const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([
+        { id: "jobTitle", value: "" },
+        { id: "position", value: "" },
+        { id: "applied_at", value: "" },
+        { id: "status", value: "" },
+        { id: "company", value: "" },
+    ]);
+
     const table = useReactTable({
         data,
         columns,
@@ -41,17 +52,56 @@ export function DataTable<TData, TValue>({
         onSortingChange: setSorting,
         getSortedRowModel: getSortedRowModel(),
         onRowSelectionChange: setRowSelection,
+        onColumnFiltersChange: setColumnFilters,
+        getFilteredRowModel: getFilteredRowModel(),
         state: {
             sorting,
             rowSelection,
+            columnFilters,
         },
-        // Pass meta to the table options
         meta,
     });
 
     return (
         <div>
             <div className="rounded-md dark:border-2 dark:border-b-white dark:border-b-4 dark:border-r-4 dark:border-r-white dark:bg-black border-black border-2 border-b-4 bg-violet-400 mt-4">
+                {/* Filter Inputs */}
+                <div className="flex items-center py-4 space-x-4 ml-2">
+                    <Input
+                        placeholder="Filter by Job Title"
+                        value={(table.getColumn("jobTitle")?.getFilterValue() as string) ?? ""}
+                        onChange={(event) =>
+                            table.getColumn("jobTitle")?.setFilterValue(event.target.value)
+                        }
+                        className="max-w-sm font-bold border-2 dark:border-yellow-500 border-black"
+                    />
+                    <Input
+                        placeholder="Filter by Position"
+                        value={(table.getColumn("position")?.getFilterValue() as string) ?? ""}
+                        onChange={(event) =>
+                            table.getColumn("position")?.setFilterValue(event.target.value)
+                        }
+                        className="max-w-sm font-bold border-2 dark:border-yellow-500 border-black"
+                    />
+                    <Input
+                        placeholder="Filter by Company"
+                        value={(table.getColumn("company")?.getFilterValue() as string) ?? ""}
+                        onChange={(event) =>
+                            table.getColumn("company")?.setFilterValue(event.target.value)
+                        }
+                        className="max-w-sm font-bold border-2 dark:border-yellow-500 border-black"
+                    />
+                    <Input
+                        type="date" // Change to date input
+                        placeholder="Filter by Date"
+                        value={(table.getColumn("applied_at")?.getFilterValue() as string) ?? ""}
+                        onChange={(event) =>
+                            table.getColumn("applied_at")?.setFilterValue(event.target.value)
+                        }
+                        className="max-w-sm font-bold border-2 dark:border-yellow-500 border-black"
+                    />
+                </div>
+
                 <Table>
                     <TableHeader>
                         {table.getHeaderGroups().map((headerGroup) => (
