@@ -26,12 +26,14 @@ export async function POST(request: NextRequest) {
             path: "/",
             maxAge: data.session.expires_in,
             sameSite: "lax",
+            secure: process.env.NODE_ENV === "production",
         });
         response.cookies.set("supabase-refresh-token", data.session.refresh_token, {
             httpOnly: true,
             path: "/",
             maxAge: 3600 * 24 * 7, // 1 week
             sameSite: "lax",
+            secure: process.env.NODE_ENV === "production",
         });
     }
 

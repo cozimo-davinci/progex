@@ -33,8 +33,8 @@ const Dashboard = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
-    const [isAddDialogOpen, setIsAddDialogOpen] = useState(false); // For ApplicationForm
-    const [isAIDialogOpen, setIsAIDialogOpen] = useState(false);   // For URLForm
+    const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+    const [isAIDialogOpen, setIsAIDialogOpen] = useState(false);
     const router = useRouter();
 
     useEffect(() => {
@@ -76,8 +76,18 @@ const Dashboard = () => {
             );
         };
 
+        const handleApplicationDeleted = (event: Event) => {
+            const deletedApplicationId = (event as CustomEvent).detail as string;
+            setJobApplications((prev) => prev.filter((app) => app.id !== deletedApplicationId));
+        };
+
         window.addEventListener("applicationUpdated", handleApplicationUpdated);
-        return () => window.removeEventListener("applicationUpdated", handleApplicationUpdated);
+        window.addEventListener("applicationDeleted", handleApplicationDeleted);
+
+        return () => {
+            window.removeEventListener("applicationUpdated", handleApplicationUpdated);
+            window.removeEventListener("applicationDeleted", handleApplicationDeleted);
+        };
     }, [router]);
 
     const handleApplicationAdded = (newApplication: Application) => {
@@ -139,7 +149,14 @@ const Dashboard = () => {
                     </DialogContent>
                 </Dialog>
             </div>
-            <DataTable columns={columns} data={jobApplications} />
+            <DataTable
+                columns={columns}
+                data={jobApplications}
+                // Pass setJobApplications via meta
+                meta={{
+                    setJobApplications,
+                }}
+            />
         </div>
     );
 };

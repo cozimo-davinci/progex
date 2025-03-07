@@ -3,7 +3,7 @@
 import * as React from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { parseISO, format } from "date-fns";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -13,13 +13,12 @@ import {
     DropdownMenuTrigger,
     DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { ArrowUpDown } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import ApplicationForm from "./application-form"; // Adjust path based on your structure
+import ApplicationForm from "./application-form";
 import { toast } from "sonner";
 import {
-    Select,
+    Select as CustomSelect,
     SelectContent,
     SelectItem,
     SelectTrigger,
@@ -28,6 +27,7 @@ import {
 
 export type Application = {
     id: string;
+    userId: string;
     jobTitle: string;
     company: string;
     position: string;
@@ -35,6 +35,228 @@ export type Application = {
     link: string;
     applied_at: string | null;
     updated_at: string | null;
+};
+
+// Define the props for the ActionsCell component
+interface ActionsCellProps {
+    application: Application;
+    setJobApplications: React.Dispatch<React.SetStateAction<Application[]>>;
+}
+
+const ActionsCell: React.FC<ActionsCellProps> = ({ application, setJobApplications }) => {
+    const [isUpdateDialogOpen, setUpdateDialogOpen] = React.useState(false);
+    const [isViewDialogOpen, setViewDialogOpen] = React.useState(false);
+    const [isDeleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+
+    const handleUpdateApplication = async (updatedData: Partial<Application>) => {
+        try {
+            const response = await fetch(`/api/applications`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ...updatedData, id: application.id }),
+                credentials: "include",
+            });
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    toast.error("Session expired. Please sign in again.");
+                    window.location.href = "/login";
+                    return;
+                }
+                throw new Error("Failed to update application");
+            }
+
+            const updatedApplication: Application = await response.json();
+            setUpdateDialogOpen(false);
+            window.dispatchEvent(
+                new CustomEvent("applicationUpdated", { detail: updatedApplication })
+            );
+            toast.success("Application updated successfully!");
+        } catch (error) {
+            console.error("Error updating application:", error);
+            toast.error("Failed to update application");
+        }
+    };
+
+    const handleDeleteApplication = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDeleteDialogOpen(true);
+    };
+
+    const confirmDelete = async () => {
+        // Close the dialog immediately
+        setDeleteDialogOpen(false);
+
+        // Perform the optimistic update
+        setJobApplications((prev) => prev.filter((app) => app.id !== application.id));
+
+        try {
+            const response = await fetch(`/api/applications?id=${application.id}`, {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+            });
+            if (!response.ok) {
+                if (response.status === 401) {
+                    toast.error("Session expired. Please sign in again.");
+                    window.location.href = "/login";
+                    setJobApplications((prev) => [...prev, application]);
+                    return;
+                }
+                if (response.status === 403) {
+                    toast.error("You are not authorized to delete this application.");
+                    setJobApplications((prev) => [...prev, application]);
+                    return;
+                }
+                if (response.status === 404) {
+                    toast.error("Application not found.");
+                    setJobApplications((prev) => [...prev, application]);
+                    return;
+                }
+                throw new Error("Failed to delete application");
+            }
+            toast.success("Application deleted successfully!");
+            window.dispatchEvent(new CustomEvent("applicationDeleted", { detail: application.id }));
+        } catch (err) {
+            setJobApplications((prev) => [...prev, application]);
+            console.error("Error deleting application:", err);
+            toast.error("Failed to delete application");
+        }
+    };
+
+    const handleMenuItemClick = (e: React.MouseEvent, action: "update" | "view") => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (action === "update") setUpdateDialogOpen(true);
+        if (action === "view") setViewDialogOpen(true);
+    };
+
+    const handleCopy = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        navigator.clipboard.writeText(application.id);
+        toast.success("Application ID copied to clipboard!");
+    };
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-8 w-8 p-0">
+                    <span className="sr-only">Open menu</span>
+                    <MoreHorizontal className="h-4 w-4" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuItem onClick={handleCopy}>
+                    Copy application ID
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={(e) => handleMenuItemClick(e, "update")}>
+                    Update Application
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={(e) => handleMenuItemClick(e, "view")}>
+                    View Application
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDeleteApplication}>
+                    Delete Application
+                </DropdownMenuItem>
+                <Dialog open={isUpdateDialogOpen} onOpenChange={setUpdateDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Update Application</DialogTitle>
+                        </DialogHeader>
+                        <ApplicationForm
+                            initialData={application}
+                            onUpdate={handleUpdateApplication}
+                            onClose={() => setUpdateDialogOpen(false)}
+                        />
+                    </DialogContent>
+                </Dialog>
+                <Dialog open={isViewDialogOpen} onOpenChange={setViewDialogOpen}>
+                    <DialogContent className="max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Application Details</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                            <p className="text-sm font-medium text-slate-100">
+                                <span className="font-bold">Job Title:</span> {application.jobTitle}
+                            </p>
+                            <p className="text-sm font-medium text-slate-100">
+                                <span className="font-bold">Company:</span> {application.company}
+                            </p>
+                            <p className="text-sm font-medium text-slate-100">
+                                <span className="font-bold">Position:</span> {application.position}
+                            </p>
+                            <p className="text-sm font-medium text-slate-100">
+                                <span className="font-bold">Status:</span>{" "}
+                                {application.status === "IN_PROGRESS"
+                                    ? "In Progress"
+                                    : application.status === "PROCESSING"
+                                        ? "Processing"
+                                        : application.status === "APPROVED"
+                                            ? "Approved"
+                                            : application.status === "REJECTED"
+                                                ? "Rejected"
+                                                : "Unknown"}
+                            </p>
+                            <p className="text-sm font-medium text-slate-100">
+                                <span className="font-bold">Link:</span>{" "}
+                                <a
+                                    href={application.link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-500 underline hover:text-blue-700"
+                                >
+                                    Job Posting
+                                </a>
+                            </p>
+                            <p className="text-sm font-medium text-slate-100">
+                                <span className="font-bold">Applied At:</span>{" "}
+                                {application.applied_at
+                                    ? `${format(parseISO(application.applied_at), "MMMM d, yyyy")} at ${format(
+                                        parseISO(application.applied_at),
+                                        "h:mm a"
+                                    )}`
+                                    : "Not set"}
+                            </p>
+                            <p className="text-sm font-medium text-slate-100">
+                                <span className="font-bold">Updated At:</span>{" "}
+                                {application.updated_at
+                                    ? `${format(parseISO(application.updated_at), "MMMM d, yyyy")} at ${format(
+                                        parseISO(application.updated_at),
+                                        "h:mm a"
+                                    )}`
+                                    : "Not set"}
+                            </p>
+                        </div>
+                        <Button variant="outline" onClick={() => setViewDialogOpen(false)}>
+                            Close
+                        </Button>
+                    </DialogContent>
+                </Dialog>
+                <Dialog open={isDeleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Confirm Deletion</DialogTitle>
+                        </DialogHeader>
+                        <p className="text-sm text-slate-100">
+                            Are you sure you want to delete the application for {application.jobTitle} at {application.company}?
+                        </p>
+                        <div className="flex justify-end gap-2 mt-4">
+                            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button variant="destructive" onClick={confirmDelete}>
+                                Delete
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
 };
 
 export const columns: ColumnDef<Application>[] = [
@@ -74,7 +296,7 @@ export const columns: ColumnDef<Application>[] = [
             <Button
                 variant="ghost"
                 onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-                className="text-slate-900  dark:text-neutral-300"
+                className="text-slate-900 dark:text-neutral-300"
             >
                 Company
                 <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -84,7 +306,7 @@ export const columns: ColumnDef<Application>[] = [
     {
         accessorKey: "position",
         header: () => (
-            <div className="text-slate-900  dark:text-neutral-300">
+            <div className="text-slate-900 dark:text-neutral-300">
                 Position
             </div>
         ),
@@ -95,7 +317,7 @@ export const columns: ColumnDef<Application>[] = [
             <Button
                 variant="ghost"
                 onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-                className="text-slate-900  dark:text-neutral-300"
+                className="text-slate-900 dark:text-neutral-300"
             >
                 Status
                 <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -110,7 +332,6 @@ export const columns: ColumnDef<Application>[] = [
                 REJECTED: "text-red-500 font-bold text-lg",
             };
 
-            // Define status options for the dropdown
             const statusOptions = [
                 { value: "IN_PROGRESS", label: "In Progress" },
                 { value: "PROCESSING", label: "Processing" },
@@ -118,7 +339,6 @@ export const columns: ColumnDef<Application>[] = [
                 { value: "REJECTED", label: "Rejected" },
             ];
 
-            // Handle status change
             const handleStatusChange = async (newStatus: string) => {
                 try {
                     const updatedData = { status: newStatus as Application["status"] };
@@ -144,7 +364,7 @@ export const columns: ColumnDef<Application>[] = [
             };
 
             return (
-                <Select
+                <CustomSelect
                     value={status}
                     onValueChange={handleStatusChange}
                     className={`w-full text-start text-lg font-bold ${statusStyles[status] || ""}`}
@@ -161,14 +381,14 @@ export const columns: ColumnDef<Application>[] = [
                             </SelectItem>
                         ))}
                     </SelectContent>
-                </Select>
+                </CustomSelect>
             );
         },
     },
     {
         accessorKey: "link",
         header: () => (
-            <div className="text-slate-900  dark:text-neutral-300">
+            <div className="text-slate-900 dark:text-neutral-300">
                 Link
             </div>
         ),
@@ -187,7 +407,7 @@ export const columns: ColumnDef<Application>[] = [
     {
         accessorKey: "applied_at",
         header: () => (
-            <div className="text-slate-900  dark:text-neutral-300">
+            <div className="text-slate-900 dark:text-neutral-300">
                 Applied At
             </div>
         ),
@@ -202,7 +422,7 @@ export const columns: ColumnDef<Application>[] = [
     {
         accessorKey: "updated_at",
         header: () => (
-            <div className="text-slate-900  dark:text-neutral-300">
+            <div className="text-slate-900 dark:text-neutral-300">
                 Updated At
             </div>
         ),
@@ -216,143 +436,13 @@ export const columns: ColumnDef<Application>[] = [
     },
     {
         id: "actions",
-        cell: ({ row }) => {
-            const application = row.original;
-            const [isUpdateDialogOpen, setUpdateDialogOpen] = React.useState(false);
-            const [isViewDialogOpen, setViewDialogOpen] = React.useState(false);
-
-            const handleUpdateApplication = async (updatedData: Partial<Application>) => {
-                try {
-                    const response = await fetch(`/api/applications`, {
-                        method: "PUT",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ ...updatedData, id: application.id }),
-                    });
-
-                    if (!response.ok) {
-                        throw new Error("Failed to update application");
-                    }
-
-                    const updatedApplication: Application = await response.json();
-                    setUpdateDialogOpen(false);
-                    window.dispatchEvent(
-                        new CustomEvent("applicationUpdated", { detail: updatedApplication })
-                    );
-                } catch (error) {
-                    console.error("Error updating application:", error);
-                    toast.error("Failed to update application");
-                }
-            };
-
-            const handleMenuItemClick = (e: React.MouseEvent, action: "update" | "view") => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (action === "update") setUpdateDialogOpen(true);
-                if (action === "view") setViewDialogOpen(true);
-            };
-
-            const handleCopy = () => {
-                navigator.clipboard.writeText(application.id);
-                toast.success("Application ID copied to clipboard!");
-            };
-
-            return (
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                            <span className="sr-only">Open menu</span>
-                            <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem onClick={handleCopy}>
-                            Copy application ID
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={(e) => handleMenuItemClick(e, "update")}>
-                            Update Application
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => handleMenuItemClick(e, "view")}>
-                            View Application
-                        </DropdownMenuItem>
-                        <Dialog open={isUpdateDialogOpen} onOpenChange={setUpdateDialogOpen}>
-                            <DialogContent>
-                                <DialogHeader>
-                                    <DialogTitle>Update Application</DialogTitle>
-                                </DialogHeader>
-                                <ApplicationForm
-                                    initialData={application}
-                                    onUpdate={handleUpdateApplication}
-                                    onClose={() => setUpdateDialogOpen(false)}
-                                />
-                            </DialogContent>
-                        </Dialog>
-                        <Dialog open={isViewDialogOpen} onOpenChange={setViewDialogOpen}>
-                            <DialogContent className="max-w-md">
-                                <DialogHeader>
-                                    <DialogTitle>Application Details</DialogTitle>
-                                </DialogHeader>
-                                <div className="space-y-4 py-4">
-                                    <p className="text-sm font-medium text-slate-100">
-                                        <span className="font-bold">Job Title:</span> {application.jobTitle}
-                                    </p>
-                                    <p className="text-sm font-medium text-slate-100">
-                                        <span className="font-bold">Company:</span> {application.company}
-                                    </p>
-                                    <p className="text-sm font-medium text-slate-100">
-                                        <span className="font-bold">Position:</span> {application.position}
-                                    </p>
-                                    <p className="text-sm font-medium text-slate-100">
-                                        <span className="font-bold">Status:</span>{" "}
-                                        {application.status === "IN_PROGRESS"
-                                            ? "In Progress"
-                                            : application.status === "PROCESSING"
-                                                ? "Processing"
-                                                : application.status === "APPROVED"
-                                                    ? "Approved"
-                                                    : application.status === "REJECTED"
-                                                        ? "Rejected"
-                                                        : "Unknown"}
-                                    </p>
-                                    <p className="text-sm font-medium text-slate-100">
-                                        <span className="font-bold">Link:</span>{" "}
-                                        <a
-                                            href={application.link}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-blue-500 underline hover:text-blue-700"
-                                        >
-                                            Job Posting
-                                        </a>
-                                    </p>
-                                    <p className="text-sm font-medium text-slate-100">
-                                        <span className="font-bold">Applied At:</span>{" "}
-                                        {application.applied_at
-                                            ? `${format(parseISO(application.applied_at), "MMMM d, yyyy")} at ${format(
-                                                parseISO(application.applied_at),
-                                                "h:mm a"
-                                            )}`
-                                            : "Not set"}
-                                    </p>
-                                    <p className="text-sm font-medium text-slate-100">
-                                        <span className="font-bold">Updated At:</span>{" "}
-                                        {application.updated_at
-                                            ? `${format(parseISO(application.updated_at), "MMMM d, yyyy")} at ${format(
-                                                parseISO(application.updated_at),
-                                                "h:mm a"
-                                            )}`
-                                            : "Not set"}
-                                    </p>
-                                </div>
-                                <Button variant="outline" onClick={() => setViewDialogOpen(false)}>
-                                    Close
-                                </Button>
-                            </DialogContent>
-                        </Dialog>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            );
+        cell: ({ row, table }) => {
+            const setJobApplications = (table.options.meta as Record<string, unknown>)?.setJobApplications as React.Dispatch<React.SetStateAction<Application[]>> | undefined;
+            if (!setJobApplications) {
+                console.error("setJobApplications is not provided to DataTable");
+                return null;
+            }
+            return <ActionsCell application={row.original} setJobApplications={setJobApplications} />;
         },
     },
 ];

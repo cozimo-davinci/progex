@@ -15,8 +15,8 @@ import {
 } from "@/components/ui/navigation-menu";
 import { ModeToggle } from "@/components/ui/dark-mode";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@components/ui/sheet";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@components/ui/collapsible";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { createSupabaseClient } from "../../../supabaseClient"; // Direct import
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -62,7 +62,8 @@ export function NavigationMenuDemo() {
     const [supabase, setSupabase] = React.useState<ReturnType<typeof createSupabaseClient> | null>(null);
 
     const router = useRouter();
-    // Initialize Supabase client on client side
+
+    // Initialize Supabase client and session
     React.useEffect(() => {
         try {
             const client = createSupabaseClient();
@@ -72,14 +73,14 @@ export function NavigationMenuDemo() {
             const checkSession = async () => {
                 const { data: { session } } = await client.auth.getSession();
                 setIsLoggedIn(!!session);
-                console.log("Initial session check:", session); // Debug log
+                console.log("Initial session check:", session);
             };
             checkSession();
 
             // Subscribe to auth state changes
             const { data: authListener } = client.auth.onAuthStateChange((event, session) => {
                 setIsLoggedIn(!!session);
-                console.log("Auth state change:", event, session); // Debug log
+                console.log("Auth state change:", event, session);
             });
 
             // Cleanup subscription on unmount
@@ -93,15 +94,36 @@ export function NavigationMenuDemo() {
 
     // Logout function
     const handleLogout = async () => {
-        if (supabase) {
-            const { error } = await supabase.auth.signOut();
-            if (error) console.error("Logout failed:", error.message);
-            else setIsLoggedIn(false); // Force update state
+        if (!supabase) {
+            toast.error("Supabase not initialized. Please try again.");
+            return;
+        }
+
+        try {
+            // Call the server-side logout endpoint
+            const response = await fetch("/api/auth/logout", {
+                method: "POST",
+                credentials: "include", // Ensure cookies are sent and cleared
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || "Logout failed");
+            }
+
+            // Update local state
+            setIsLoggedIn(false);
             toast.success("Logout successful!", { description: "See you soon!" });
+
+            // Redirect after a short delay to ensure cookies are cleared
             setTimeout(() => {
-                // window.location.href = "/"; // Full reload to sync state
-                router.push('/');
-            }, 200);
+                router.push("/");
+            }, 500); // Increased delay to 500ms for reliability
+        } catch (error) {
+            console.error("Logout error:", error);
+            toast.error("Logout failed. Please try again.", {
+                description: error instanceof Error ? error.message : "An unexpected error occurred.",
+            });
         }
     };
 
@@ -188,7 +210,7 @@ export function NavigationMenuDemo() {
                                 </NavigationMenuItem>
                                 {isLoggedIn ? (
                                     <NavigationMenuItem>
-                                        <NavigationMenuLink onClick={handleLogout} className={navigationMenuTriggerStyle()}>
+                                        <NavigationMenuLink onClick={handleLogout} className={cn(navigationMenuTriggerStyle(), "cursor-pointer")}>
                                             Logout
                                         </NavigationMenuLink>
                                     </NavigationMenuItem>
@@ -265,7 +287,7 @@ export function NavigationMenuDemo() {
                     </NavigationMenuItem>
                     {isLoggedIn ? (
                         <NavigationMenuItem>
-                            <NavigationMenuLink onClick={handleLogout} className={navigationMenuTriggerStyle()}>
+                            <NavigationMenuLink onClick={handleLogout} className={cn(navigationMenuTriggerStyle(), "cursor-pointer")}>
                                 Logout
                             </NavigationMenuLink>
                         </NavigationMenuItem>
