@@ -10,7 +10,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { Calendar, Home, Inbox, Search, Settings } from 'lucide-react';
+import { Calendar, Home, GraduationCap, Fan, Settings } from 'lucide-react';
 
 const menuItems = [
     {
@@ -26,16 +26,16 @@ const menuItems = [
         icon: Calendar
     },
     {
-        title: "Inbox",
-        href: "/inbox",
-        description: "Inbox page",
-        icon: Inbox
+        title: "Resume Tutor",
+        href: "/resume-tutor",
+        description: "Resume Tutor Page",
+        icon: GraduationCap
     },
     {
-        title: "Search",
+        title: "AI Interviewer",
         href: "/search",
-        description: "Search page",
-        icon: Search
+        description: "AI Interview page",
+        icon: Fan
     },
     {
         title: "Settings",
