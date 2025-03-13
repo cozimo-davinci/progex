@@ -1,10 +1,18 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
+import Document from '@tiptap/extension-document';
+import Paragraph from '@tiptap/extension-paragraph';
+import Text from '@tiptap/extension-text';
+import Bold from '@tiptap/extension-bold';
+import Italic from '@tiptap/extension-italic';
+import BulletList from '@tiptap/extension-bullet-list';
+import OrderedList from '@tiptap/extension-ordered-list';
+import ListItem from '@tiptap/extension-list-item';
+import Heading from '@tiptap/extension-heading';
 import { Button } from '@/components/ui/button';
-import { Link } from '@tiptap/extension-link';
+import Link from '@tiptap/extension-link';
 
 interface TipTapEditorProps {
     value: string;
@@ -14,41 +22,52 @@ interface TipTapEditorProps {
 const TipTapEditor: React.FC<TipTapEditorProps> = ({ value, onChange }) => {
     const editor = useEditor({
         extensions: [
-            StarterKit.configure({
-                // Customize starter kit if needed
-                bulletList: {
-                    keepMarks: true,
-                    keepAttributes: false,
-                },
-                orderedList: {
-                    keepMarks: true,
-                    keepAttributes: false,
-                },
+            Document,
+            Paragraph,
+            Text,
+            Bold,
+            Italic,
+            BulletList.configure({
+                keepMarks: true,
+                keepAttributes: false,
             }),
+            OrderedList.configure({
+                keepMarks: true,
+                keepAttributes: false,
+            }),
+            ListItem,
+            Heading.configure({ levels: [1, 2] }),
             Link.configure({
-                openOnClick: false,
+                openOnClick: true,
                 autolink: true,
             }),
         ],
-        content: value, // Initialize with the passed value
+        content: value,
         onUpdate: ({ editor }) => {
-            onChange(editor.getHTML()); // Update parent state with HTML content
+            onChange(editor.getHTML());
         },
         editable: true,
         editorProps: {
             attributes: {
-                class: 'prose prose-sm sm:prose-base lg:prose-lg xl:prose-2xl p-4 min-h-[300px] bg-white dark:bg-gray-800 text-black dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500',
+                class: 'prose prose-sm sm:prose-base lg:prose-lg xl:prose-2xl p-4 bg-white dark:bg-gray-800 text-black dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500',
             },
         },
     });
+
+    useEffect(() => {
+        if (editor && value !== editor.getHTML()) {
+            editor.commands.setContent(value, false, {
+                preserveWhitespace: true,
+            });
+        }
+    }, [value, editor]);
 
     if (!editor) {
         return <div>Loading editor...</div>;
     }
 
     return (
-        <div className="space-y-2">
-            {/* Toolbar */}
+        <div className="flex flex-col h-full min-w-full">
             <div className="flex flex-wrap gap-2 p-2 bg-gray-100 dark:bg-gray-700 rounded-t-md">
                 <Button
                     variant={editor.isActive('bold') ? 'default' : 'outline'}
@@ -96,7 +115,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({ value, onChange }) => {
                     variant={editor.isActive('link') ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => {
-                        const url = window.prompt('Enter URL');
+                        const url = window.prompt('Enter the URL');
                         if (url) {
                             editor.chain().focus().setLink({ href: url }).run();
                         }
@@ -104,17 +123,10 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({ value, onChange }) => {
                 >
                     Link
                 </Button>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => editor.chain().focus().unsetLink().run()}
-                    disabled={!editor.isActive('link')}
-                >
-                    Unlink
-                </Button>
             </div>
-            {/* Editor Content */}
-            <EditorContent editor={editor} />
+            <div className="flex-grow overflow-y-auto h-full mt-4 mb-4 mr-2 rounded-lg dark:border-purple-500 border-2 border-yellow-500">
+                <EditorContent editor={editor} />
+            </div>
         </div>
     );
 };

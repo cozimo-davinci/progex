@@ -9,8 +9,6 @@ import { toast } from "sonner";
 import debounce from "lodash/debounce";
 import TipTapEditor from "@components/ui/TipTapEditor";
 
-
-
 interface JobApplication {
     resumeKey: string;
     tailoredResumeKey: string;
@@ -18,7 +16,7 @@ interface JobApplication {
     jobDescription: string;
     tailoredResumeContent: string;
     coverLetterContent: string;
-    originalResumeUrl?: string; // Signed URL for original resume
+    originalResumeUrl?: string;
 }
 
 const ResumeTutor = () => {
@@ -29,7 +27,6 @@ const ResumeTutor = () => {
     const [applications, setApplications] = useState<JobApplication[]>([]);
     const [selectedApplication, setSelectedApplication] = useState<string | null>(null);
 
-    // Debounced save function
     const saveContent = async (key: string, content: string) => {
         try {
             const response = await fetch("/api/editor-saves", {
@@ -41,17 +38,14 @@ const ResumeTutor = () => {
                 toast.error("Failed to save content");
                 throw new Error('Failed to save content to S3');
             }
-            console.log('Content saved successfully:', key);
             toast.success("Content saved successfully");
         } catch (error) {
-            console.error("Error saving content:", error);
-            // Optionally notify the user (e.g., with a toast)
             toast.error("Error saving content");
+            console.error("Error saving content:", error);
         }
     };
     const saveContentDebounced = useMemo(() => debounce(saveContent, 3000), []);
 
-    // Handle resume upload
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -67,7 +61,6 @@ const ResumeTutor = () => {
             if (response.ok) {
                 const { key } = await response.json();
                 setResumeKey(key);
-                // Optionally fetch a signed URL for the original resume
                 const signedUrlRes = await fetch(`/api/get-signed-url?key=${key}`);
                 const { url } = await signedUrlRes.json();
                 setApplications(prev => [...prev, {
@@ -80,15 +73,12 @@ const ResumeTutor = () => {
                     originalResumeUrl: url,
                 }]);
                 setSelectedApplication(key);
-            } else {
-                console.error("Failed to upload resume");
             }
         } catch (error) {
             console.error("Error uploading resume:", error);
         }
     };
 
-    // Handle AI processing
     const handleReceiveSuggestions = async () => {
         if (!resumeKey || !jobDescription) {
             alert("Please upload a resume and provide a job description");
@@ -104,43 +94,30 @@ const ResumeTutor = () => {
             });
             if (response.ok) {
                 const { resumeKey: returnedResumeKey, tailoredResumeKey, coverLetterKey } = await response.json();
-
-                // Fetch content for display
                 const resumeRes = await fetch(`/api/s3-content?key=${tailoredResumeKey}`);
                 const { content: resumeContent } = await resumeRes.json();
                 const coverRes = await fetch(`/api/s3-content?key=${coverLetterKey}`);
                 const { content: coverContent } = await coverRes.json();
 
-                // Update the application
                 setApplications(prev => {
                     const updated = prev.map(app =>
                         app.resumeKey === returnedResumeKey
-                            ? {
-                                ...app,
-                                tailoredResumeKey,
-                                coverLetterKey,
-                                jobDescription,
-                                tailoredResumeContent: resumeContent || '',
-                                coverLetterContent: coverContent || ''
-                            }
+                            ? { ...app, tailoredResumeKey, coverLetterKey, jobDescription, tailoredResumeContent: resumeContent || '', coverLetterContent: coverContent || '' }
                             : app
                     );
                     return updated;
                 });
                 setSelectedApplication(returnedResumeKey);
-            } else {
-                console.error("Failed to generate documents");
             }
         } catch (error) {
             console.error("Error generating documents:", error);
         } finally {
             setIsProcessing(false);
-            setJobDescription(""); // Reset for next application
+            setJobDescription("");
             setPrompt("");
         }
     };
 
-    // New endpoint to get signed URL (add this to backend if needed)
     const currentApp = applications.find(app => app.resumeKey === selectedApplication);
 
     return (
@@ -148,35 +125,30 @@ const ResumeTutor = () => {
             <div className="absolute inset-0 bg-black bg-opacity-20 rounded-lg"></div>
             <div className="relative z-10 w-full max-w-lg">
                 <h1 className="text-3xl dark:text-white text-white text-center font-bold">Welcome to Resume Tutor</h1>
-
                 {/* Resume Upload */}
                 <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
-                    <Label htmlFor="resume-upload" className="font-bold mb-4 block dark:text-white text-white">Upload Your Resume</Label>
-                    <Input id="resume-upload" type="file" accept=".pdf,.doc,.docx" onChange={handleFileUpload} />
+                    <Label htmlFor="resume-upload" className="text-xl font-bold mb-4 block dark:text-white text-white">Upload Your Resume</Label>
+                    <Input id="resume-upload" type="file" accept=".pdf,.doc,.docx" onChange={handleFileUpload} className="dark:border-purple-500" />
                     <p className="text-sm text-muted-foreground text-center mt-2"><span className="font-bold">Note:</span> Supported formats: PDF, DOC, DOCX.</p>
                 </div>
-
                 {/* Job Description */}
                 <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
-                    <Label htmlFor="job-desc" className="font-bold mb-4 block dark:text-white text-white">Job Description</Label>
-                    <Textarea id="job-desc" placeholder="Paste job description here." value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} />
+                    <Label htmlFor="job-desc" className="text-xl font-bold mb-4 block dark:text-white text-white">Job Description</Label>
+                    <Textarea id="job-desc" placeholder="Paste job description here." value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} className="dark:border-purple-500" />
                 </div>
-
                 {/* Prompt */}
                 <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
-                    <Label htmlFor="prompt" className="font-bold mb-4 block dark:text-white text-white">Prompt</Label>
-                    <Input id="prompt" placeholder="E.g., Tailor my resume based on the job description." value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+                    <Label htmlFor="prompt" className="text-xl font-bold mb-4 block dark:text-white text-white">Prompt</Label>
+                    <Input id="prompt" placeholder="E.g., Tailor my resume based on the job description." value={prompt} onChange={(e) => setPrompt(e.target.value)} className="dark:border-purple-500" />
                 </div>
-
                 {/* Button */}
                 <Button className="mt-4" onClick={handleReceiveSuggestions} disabled={isProcessing}>
                     {isProcessing ? "Processing..." : "Receive Suggestions"}
                 </Button>
-
                 {/* Application Selection */}
                 {applications.length > 0 && (
                     <div className="mt-10">
-                        <Label className="font-bold mb-4 block dark:text-white text-white">Select Application</Label>
+                        <Label className="text-2xl font-bold mb-4 block dark:text-white text-white">Select Application</Label>
                         <select
                             value={selectedApplication || ''}
                             onChange={(e) => setSelectedApplication(e.target.value)}
@@ -190,25 +162,26 @@ const ResumeTutor = () => {
                         </select>
                     </div>
                 )}
-
-                {/* Results */}
-                {currentApp && (
-                    <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
-                        <Label className="font-bold mb-4 block dark:text-white text-white">Results</Label>
-                        <Tabs defaultValue="original" className="w-full">
-                            <TabsList className="grid w-full grid-cols-3">
-                                <TabsTrigger value="original">Original Resume</TabsTrigger>
-                                <TabsTrigger value="resume" disabled={!currentApp.tailoredResumeKey}>Tailored Resume</TabsTrigger>
-                                <TabsTrigger value="cover-letter" disabled={!currentApp.coverLetterKey}>Cover Letter</TabsTrigger>
-                            </TabsList>
-                            <TabsContent value="original">
+            </div>
+            {/* Results */}
+            {currentApp && (
+                <div className="relative z-10 w-full h-screen md:w-4/5 mt-10 bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
+                    <Label className="text-xl font-bold mb-4 block dark:text-white text-white">Results</Label>
+                    <Tabs defaultValue="original" className="w-full h-full">
+                        <TabsList className="grid w-full grid-cols-3">
+                            <TabsTrigger value="original">Original Resume</TabsTrigger>
+                            <TabsTrigger value="resume" disabled={!currentApp.tailoredResumeKey}>Tailored Resume</TabsTrigger>
+                            <TabsTrigger value="cover-letter" disabled={!currentApp.coverLetterKey}>Cover Letter</TabsTrigger>
+                        </TabsList>
+                        <div className="h-[calc(100%-4rem)] overflow-y-auto">
+                            <TabsContent value="original" className="h-full">
                                 {currentApp.originalResumeUrl ? (
-                                    <iframe src={currentApp.originalResumeUrl} className="w-full h-96" />
+                                    <iframe src={currentApp.originalResumeUrl} className="w-full h-full mt-4 border-2 dark:border-purple-500 border-yellow-500 rounded-lg mr-4" />
                                 ) : (
                                     <p className="text-white">Original resume not available.</p>
                                 )}
                             </TabsContent>
-                            <TabsContent value="resume">
+                            <TabsContent value="resume" className="h-full">
                                 <TipTapEditor
                                     value={currentApp.tailoredResumeContent}
                                     onChange={(content) => {
@@ -223,7 +196,7 @@ const ResumeTutor = () => {
                                     }}
                                 />
                             </TabsContent>
-                            <TabsContent value="cover-letter">
+                            <TabsContent value="cover-letter" className="h-full">
                                 <TipTapEditor
                                     value={currentApp.coverLetterContent}
                                     onChange={(content) => {
@@ -238,10 +211,10 @@ const ResumeTutor = () => {
                                     }}
                                 />
                             </TabsContent>
-                        </Tabs>
-                    </div>
-                )}
-            </div>
+                        </div>
+                    </Tabs>
+                </div>
+            )}
         </div>
     );
 };
