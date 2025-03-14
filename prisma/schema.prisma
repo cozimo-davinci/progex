@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,7 +5,6 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  
 }
 
 enum Status {
@@ -21,16 +14,34 @@ enum Status {
   REJECTED
 }
 
+model resume {
+  id        BigInt   @id @default(autoincrement())
+  userId    String   @db.Uuid
+  fileName  String   @db.Text
+  resumeKey String   @db.Text
+  createdAt DateTime @default(now()) @db.Timestamptz
+}
 
-model JobApplication {
-  id        String   @id @default(uuid())
-  userId    String
-  jobTitle  String
-  company   String
-  position  String
-  status    Status
-  link      String
+model resume_application {
+  id                BigInt    @id @default(autoincrement())
+  userId            String    @db.Uuid
+  resumeKey         String    @db.Text
+  companyName       String    @db.Text
+  position          String    @db.Text
+  tailoredResumeKey String    @db.Text
+  coverLetterKey    String    @db.Text
+  jobDescription    String?   @db.Text
+  createdAt         DateTime  @default(now()) @db.Timestamptz
+}
+
+model job_application {
+  id         String    @id @default(uuid())
+  userId     String    @db.Uuid
+  jobTitle   String
+  company    String
+  position   String
+  status     Status
+  link       String
   applied_at DateTime?
-  updated_at DateTime @updatedAt
-
+  updated_at DateTime  @updatedAt
 }

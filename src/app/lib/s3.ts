@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Upload } from '@aws-sdk/lib-storage';
 import { Readable } from 'stream';
@@ -39,4 +39,10 @@ export const getObjectFromS3 = async (Bucket: string, Key: string) => {
     const command = new GetObjectCommand({ Bucket, Key });
     const response = await s3Client.send(command);
     return response.Body;
+};
+
+export const listObjectsFromS3 = async (Bucket: string, Prefix: string) => {
+    const command = new ListObjectsV2Command({ Bucket, Prefix });
+    const response = await s3Client.send(command);
+    return response.Contents || [];
 };

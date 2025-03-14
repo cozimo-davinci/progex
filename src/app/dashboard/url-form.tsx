@@ -52,12 +52,12 @@ const URLForm: React.FC<URLFormProps> = ({ userId, onApplicationAdded, onClose }
             const applicationData = {
                 jobTitle: parsedData.jobTitle || "Unknown",
                 company: parsedData.company || "Unknown",
-                position: parsedData.position || "Unknown",
-                link: url, // Use the input URL as the link
+                position: parsedData.position && parsedData.position !== "Unknown" ? parsedData.position : "Unknown Position",
+                link: url,
                 userId,
-                status: "IN_PROGRESS" as const, // Default status
-                applied_at: new Date().toISOString(), // Current time
-                updated_at: new Date().toISOString(), // Current time
+                status: "IN_PROGRESS" as const,
+                applied_at: new Date().toISOString(),
+                // Remove updated_at since it's managed by Prisma
             };
 
             // Save the application to the database

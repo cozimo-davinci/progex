@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@components/ui/input";
@@ -17,15 +17,89 @@ interface JobApplication {
     tailoredResumeContent: string;
     coverLetterContent: string;
     originalResumeUrl?: string;
+    companyName?: string;
+    position?: string;
+}
+
+interface PreviousResume {
+    key: string;
+    name: string;
+}
+
+interface PastApplication {
+    resumeKey: string;
+    companyName: string;
+    position: string;
+    tailoredResumeKey: string;
+    coverLetterKey: string;
 }
 
 const ResumeTutor = () => {
     const [resumeKey, setResumeKey] = useState<string | null>(null);
     const [jobDescription, setJobDescription] = useState("");
     const [prompt, setPrompt] = useState("");
+    const [companyName, setCompanyName] = useState("");
+    const [position, setPosition] = useState("");
     const [isProcessing, setIsProcessing] = useState(false);
     const [applications, setApplications] = useState<JobApplication[]>([]);
     const [selectedApplication, setSelectedApplication] = useState<string | null>(null);
+    const [previousResumes, setPreviousResumes] = useState<PreviousResume[]>([]);
+    const [pastApplications, setPastApplications] = useState<PastApplication[]>([]);
+
+    // Fetch previous resumes and past applications on mount
+    useEffect(() => {
+        const fetchPreviousResumes = async () => {
+            try {
+                const response = await fetch("/api/user-resumes");
+                if (response.ok) {
+                    const { resumes } = await response.json();
+                    setPreviousResumes(resumes);
+                }
+            } catch (error) {
+                console.error("Error fetching previous resumes:", error);
+            }
+        };
+
+        const fetchPastApplications = async () => {
+            try {
+                const response = await fetch("/api/user-job-postings");
+                if (response.ok) {
+                    const { applications } = await response.json();
+                    setPastApplications(applications);
+                    // Initialize applications state with past applications
+                    const loadedApplications = await Promise.all(
+                        applications.map(async (app: PastApplication) => {
+                            const [resumeRes, coverRes, signedUrlRes] = await Promise.all([
+                                fetch(`/api/s3-content?key=${app.tailoredResumeKey}`),
+                                fetch(`/api/s3-content?key=${app.coverLetterKey}`),
+                                fetch(`/api/get-signed-url?key=${app.resumeKey}`),
+                            ]);
+                            const resumeData = await resumeRes.json();
+                            const coverData = await coverRes.json();
+                            const signedUrlData = await signedUrlRes.json();
+                            return {
+                                resumeKey: app.resumeKey,
+                                tailoredResumeKey: app.tailoredResumeKey,
+                                coverLetterKey: app.coverLetterKey,
+                                jobDescription: "",
+                                tailoredResumeContent: resumeData.content || "",
+                                coverLetterContent: coverData.content || "",
+                                originalResumeUrl: signedUrlData.url,
+                                companyName: app.companyName,
+                                position: app.position,
+                            };
+                        })
+                    );
+                    setApplications(loadedApplications);
+                }
+            } catch (error) {
+                console.error("Error fetching past applications:", error);
+            }
+        };
+
+        fetchPreviousResumes();
+        fetchPastApplications();
+    }, []);
 
     const saveContent = async (key: string, content: string) => {
         try {
@@ -34,14 +108,11 @@ const ResumeTutor = () => {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ key, content }),
             });
-            if (!response.ok) {
-                toast.error("Failed to save content");
-                throw new Error('Failed to save content to S3');
-            }
+            if (!response.ok) throw new Error("Failed to save content");
             toast.success("Content saved successfully");
         } catch (error) {
             toast.error("Error saving content");
-            console.error("Error saving content:", error);
+            console.error("Error:", error);
         }
     };
     const saveContentDebounced = useMemo(() => debounce(saveContent, 3000), []);
@@ -65,14 +136,20 @@ const ResumeTutor = () => {
                 const { url } = await signedUrlRes.json();
                 setApplications(prev => [...prev, {
                     resumeKey: key,
-                    tailoredResumeKey: '',
-                    coverLetterKey: '',
-                    jobDescription: '',
-                    tailoredResumeContent: '',
-                    coverLetterContent: '',
+                    tailoredResumeKey: "",
+                    coverLetterKey: "",
+                    jobDescription: "",
+                    tailoredResumeContent: "",
+                    coverLetterContent: "",
                     originalResumeUrl: url,
                 }]);
                 setSelectedApplication(key);
+                // Refresh previous resumes
+                const resumesResponse = await fetch("/api/user-resumes");
+                if (resumesResponse.ok) {
+                    const { resumes } = await resumesResponse.json();
+                    setPreviousResumes(resumes);
+                }
             }
         } catch (error) {
             console.error("Error uploading resume:", error);
@@ -80,8 +157,8 @@ const ResumeTutor = () => {
     };
 
     const handleReceiveSuggestions = async () => {
-        if (!resumeKey || !jobDescription) {
-            alert("Please upload a resume and provide a job description");
+        if (!resumeKey || !jobDescription || !companyName || !position) {
+            alert("Please provide all required fields");
             return;
         }
 
@@ -90,7 +167,7 @@ const ResumeTutor = () => {
             const response = await fetch("/api/ai-resume", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ resumeKey, jobDescription, prompt }),
+                body: JSON.stringify({ resumeKey, jobDescription, prompt, companyName, position }),
             });
             if (response.ok) {
                 const { resumeKey: returnedResumeKey, tailoredResumeKey, coverLetterKey } = await response.json();
@@ -102,12 +179,19 @@ const ResumeTutor = () => {
                 setApplications(prev => {
                     const updated = prev.map(app =>
                         app.resumeKey === returnedResumeKey
-                            ? { ...app, tailoredResumeKey, coverLetterKey, jobDescription, tailoredResumeContent: resumeContent || '', coverLetterContent: coverContent || '' }
+                            ? { ...app, tailoredResumeKey, coverLetterKey, jobDescription, tailoredResumeContent: resumeContent || "", coverLetterContent: coverContent || "", companyName, position }
                             : app
                     );
                     return updated;
                 });
                 setSelectedApplication(returnedResumeKey);
+
+                // Refresh past applications
+                const applicationsResponse = await fetch("/api/user-job-postings");
+                if (applicationsResponse.ok) {
+                    const { applications: updatedApps } = await applicationsResponse.json();
+                    setPastApplications(updatedApps);
+                }
             }
         } catch (error) {
             console.error("Error generating documents:", error);
@@ -115,6 +199,8 @@ const ResumeTutor = () => {
             setIsProcessing(false);
             setJobDescription("");
             setPrompt("");
+            setCompanyName("");
+            setPosition("");
         }
     };
 
@@ -125,9 +211,77 @@ const ResumeTutor = () => {
             <div className="absolute inset-0 bg-black bg-opacity-20 rounded-lg"></div>
             <div className="relative z-10 w-full max-w-lg">
                 <h1 className="text-3xl dark:text-white text-white text-center font-bold">Welcome to Resume Tutor</h1>
+
+                {/* Past Documents Section */}
+                <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
+                    <Label className="text-xl font-bold mb-4 block dark:text-white text-white">Your Past Documents</Label>
+                    {/* Previous Initial Resumes */}
+                    {previousResumes.length > 0 && (
+                        <div className="mb-4">
+                            <Label htmlFor="previous-resumes" className="text-lg font-semibold mb-2 block dark:text-white text-white">Select Previous Initial Resume</Label>
+                            <select
+                                id="previous-resumes"
+                                value={resumeKey || ""}
+                                onChange={(e) => {
+                                    const selectedKey = e.target.value;
+                                    setResumeKey(selectedKey);
+                                    const selectedResume = previousResumes.find(resume => resume.key === selectedKey);
+                                    if (selectedResume) {
+                                        fetch(`/api/get-signed-url?key=${selectedKey}`)
+                                            .then(res => res.json())
+                                            .then(data => {
+                                                const existingApp = applications.find(app => app.resumeKey === selectedKey);
+                                                if (!existingApp) {
+                                                    setApplications(prev => [...prev, {
+                                                        resumeKey: selectedKey,
+                                                        tailoredResumeKey: "",
+                                                        coverLetterKey: "",
+                                                        jobDescription: "",
+                                                        tailoredResumeContent: "",
+                                                        coverLetterContent: "",
+                                                        originalResumeUrl: data.url,
+                                                    }]);
+                                                }
+                                                setSelectedApplication(selectedKey);
+                                            });
+                                    }
+                                }}
+                                className="w-full p-2 bg-slate-900 text-white border-2 dark:border-yellow-500 rounded-md"
+                            >
+                                <option value="">Select a resume</option>
+                                {previousResumes.map(resume => (
+                                    <option key={resume.key} value={resume.key}>
+                                        {resume.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+                    {/* Past Tailored Applications */}
+                    {pastApplications.length > 0 && (
+                        <div>
+                            <Label className="text-lg font-semibold mb-2 block dark:text-white text-white">Past Tailored Applications</Label>
+                            <ul className="list-disc pl-5 text-white">
+                                {pastApplications.map(app => (
+                                    <li key={`${app.resumeKey}-${app.companyName}-${app.position}`}>
+                                        {app.companyName} - {app.position} (Resume: {app.resumeKey.split('/').pop()})
+                                        <Button
+                                            variant="link"
+                                            className="ml-2 text-yellow-500"
+                                            onClick={() => setSelectedApplication(app.resumeKey)}
+                                        >
+                                            View
+                                        </Button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+
                 {/* Resume Upload */}
                 <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
-                    <Label htmlFor="resume-upload" className="text-xl font-bold mb-4 block dark:text-white text-white">Upload Your Resume</Label>
+                    <Label htmlFor="resume-upload" className="text-xl font-bold mb-4 block dark:text-white text-white">Upload New Resume</Label>
                     <Input id="resume-upload" type="file" accept=".pdf,.doc,.docx" onChange={handleFileUpload} className="dark:border-purple-500" />
                     <p className="text-sm text-muted-foreground text-center mt-2"><span className="font-bold">Note:</span> Supported formats: PDF, DOC, DOCX.</p>
                 </div>
@@ -136,13 +290,24 @@ const ResumeTutor = () => {
                     <Label htmlFor="job-desc" className="text-xl font-bold mb-4 block dark:text-white text-white">Job Description</Label>
                     <Textarea id="job-desc" placeholder="Paste job description here." value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} className="dark:border-purple-500" />
                 </div>
+                {/* Company Name */}
+                <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
+                    <Label htmlFor="company-name" className="text-xl font-bold mb-4 block dark:text-white text-white">Company Name</Label>
+                    <Input id="company-name" placeholder="Enter company name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="dark:border-purple-500" />
+                </div>
+                {/* Position */}
+                <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
+                    <Label htmlFor="position" className="text-xl font-bold mb-4 block dark:text-white text-white">Position</Label>
+                    <Input id="position" placeholder="Enter position" value={position} onChange={(e) => setPosition(e.target.value)} className="dark:border-purple-500" />
+                </div>
                 {/* Prompt */}
                 <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
                     <Label htmlFor="prompt" className="text-xl font-bold mb-4 block dark:text-white text-white">Prompt</Label>
                     <Input id="prompt" placeholder="E.g., Tailor my resume based on the job description." value={prompt} onChange={(e) => setPrompt(e.target.value)} className="dark:border-purple-500" />
                 </div>
                 {/* Button */}
-                <Button className="mt-4" onClick={handleReceiveSuggestions} disabled={isProcessing}>
+                <Button className="mt-4 text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
+                    onClick={handleReceiveSuggestions} disabled={isProcessing}>
                     {isProcessing ? "Processing..." : "Receive Suggestions"}
                 </Button>
                 {/* Application Selection */}
@@ -150,13 +315,14 @@ const ResumeTutor = () => {
                     <div className="mt-10">
                         <Label className="text-2xl font-bold mb-4 block dark:text-white text-white">Select Application</Label>
                         <select
-                            value={selectedApplication || ''}
+                            value={selectedApplication || ""}
                             onChange={(e) => setSelectedApplication(e.target.value)}
                             className="w-full p-2 bg-slate-900 text-white border-2 dark:border-yellow-500 rounded-md"
                         >
+                            <option value="">Select an application</option>
                             {applications.map(app => (
                                 <option key={app.resumeKey} value={app.resumeKey}>
-                                    Resume: {app.resumeKey.split('/')[1]} {app.jobDescription ? `- ${app.jobDescription.slice(0, 20)}...` : ''}
+                                    {app.companyName && app.position ? `${app.companyName} - ${app.position}` : `Resume: ${app.resumeKey.split('/').pop()}`}
                                 </option>
                             ))}
                         </select>
@@ -185,11 +351,9 @@ const ResumeTutor = () => {
                                 <TipTapEditor
                                     value={currentApp.tailoredResumeContent}
                                     onChange={(content) => {
-                                        setApplications((prev) =>
-                                            prev.map((app) =>
-                                                app.resumeKey === currentApp.resumeKey
-                                                    ? { ...app, tailoredResumeContent: content }
-                                                    : app
+                                        setApplications(prev =>
+                                            prev.map(app =>
+                                                app.resumeKey === currentApp.resumeKey ? { ...app, tailoredResumeContent: content } : app
                                             )
                                         );
                                         saveContentDebounced(currentApp.tailoredResumeKey, content);
@@ -200,11 +364,9 @@ const ResumeTutor = () => {
                                 <TipTapEditor
                                     value={currentApp.coverLetterContent}
                                     onChange={(content) => {
-                                        setApplications((prev) =>
-                                            prev.map((app) =>
-                                                app.resumeKey === currentApp.resumeKey
-                                                    ? { ...app, coverLetterContent: content }
-                                                    : app
+                                        setApplications(prev =>
+                                            prev.map(app =>
+                                                app.resumeKey === currentApp.resumeKey ? { ...app, coverLetterContent: content } : app
                                             )
                                         );
                                         saveContentDebounced(currentApp.coverLetterKey, content);

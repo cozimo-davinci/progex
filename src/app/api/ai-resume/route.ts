@@ -1,28 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getObjectFromS3, uploadToS3 } from '../../lib/s3';
+import { getObjectFromS3, uploadToS3, listObjectsFromS3 } from '../../lib/s3';
 import { Mistral } from '@mistralai/mistralai';
 import { v4 as uuidv4 } from 'uuid';
+import { getCurrentUser } from '../auth/get-current-user/route';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!);
 
 export async function POST(req: NextRequest) {
-    const { resumeKey, jobDescription, prompt } = await req.json();
-    if (!resumeKey || !jobDescription) {
-        console.error('Missing resumeKey or jobDescription in request');
-        return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+  const user = await getCurrentUser(req);
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { resumeKey, jobDescription, prompt, companyName, position } = await req.json();
+  if (!resumeKey || !jobDescription || !companyName || !position) {
+    console.error('Missing required fields in request');
+    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+  }
+
+  try {
+    const userId = user.id;
+    console.log(`Starting AI resume generation for resumeKey: ${resumeKey}`);
+
+    // Check for duplicate tailored resume in S3
+    const jobPostingFolder = `${companyName}-${position}`.replace(/\s+/g, '-').toLowerCase();
+    const tailoredResumePrefix = `users/${userId}/tailored-resumes/${jobPostingFolder}/${resumeKey}`;
+    const coverLetterPrefix = `users/${userId}/cover-letters/${jobPostingFolder}/${resumeKey}`;
+    const tailoredResumes = await listObjectsFromS3(process.env.S3_BUCKET_NAME!, tailoredResumePrefix);
+    const coverLetters = await listObjectsFromS3(process.env.S3_BUCKET_NAME!, coverLetterPrefix);
+
+    if (tailoredResumes.length > 0 && coverLetters.length > 0) {
+      console.log('Duplicate application found in S3, returning existing keys');
+      return NextResponse.json({
+        resumeKey,
+        tailoredResumeKey: tailoredResumes[0].Key,
+        coverLetterKey: coverLetters[0].Key,
+      });
     }
 
-    try {
-        console.log(`Starting AI resume generation for resumeKey: ${resumeKey}`);
-        const extractedTextKey = `extracted-resumes/${resumeKey}-extracted.txt`;
-        console.log(`Fetching extracted text from S3 with key: ${extractedTextKey}`);
-        const extractedTextBody = await getObjectFromS3(process.env.S3_BUCKET_NAME!, extractedTextKey);
-        const extractedText = await extractedTextBody?.transformToString('utf-8');
-        if (!extractedText) {
-            console.error('Extracted text not found in S3');
-            throw new Error('Extracted text not found');
-        }
-        console.log('Extracted text fetched successfully');
+    // Fetch extracted text
+    const extractedTextKey = `users/${userId}/extracted-resumes/${resumeKey}-extracted.txt`;
+    console.log(`Fetching extracted text from S3 with key: ${extractedTextKey}`);
+    const extractedTextBody = await getObjectFromS3(process.env.S3_BUCKET_NAME!, extractedTextKey);
+    const extractedText = await extractedTextBody?.transformToString('utf-8');
+    if (!extractedText) {
+      console.error('Extracted text not found in S3');
+      throw new Error('Extracted text not found');
+    }
+    console.log('Extracted text fetched successfully');
 
-        const aiPrompt = `
+    // Generate tailored documents using Mistral AI
+    const aiPrompt = `
         You are an AI assistant specialized in resume tailoring and cover letter writing. Given the following information:
         
         1. Extracted resume text (in Markdown format):
@@ -88,77 +117,93 @@ export async function POST(req: NextRequest) {
         - Add 5 bullet points for each project under the 'RELEVANT EXPERIENCE' section, as specified by the user.
         - Ensure the HTML output is clean, with no extraneous line breaks or excessive spacing beyond what is specified in the formatting instructions.
         `;
-        console.log('Sending prompt to Mistral AI...');
+    console.log('Sending prompt to Mistral AI...');
 
-        const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! });
-        const chatResponse = await client.chat.complete({
-            model: 'mistral-large-latest',
-            messages: [{ role: 'user', content: aiPrompt }],
-        });
-        console.log('Mistral AI response received');
+    const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! });
+    const chatResponse = await client.chat.complete({
+      model: 'mistral-large-latest',
+      messages: [{ role: 'user', content: aiPrompt }],
+    });
+    console.log('Mistral AI response received');
 
-        // Check choices
-        if (!chatResponse.choices || chatResponse.choices.length === 0) {
-            console.error('No choices found in AI response');
-            throw new Error('No choices found in AI response');
-        }
-
-        const generatedText = chatResponse.choices[0].message.content;
-        if (!generatedText) {
-            console.error('Generated text is null or undefined');
-            throw new Error('Generated text is null or undefined');
-        }
-
-        // Log the response for debugging
-        console.log('Generated text:', generatedText);
-
-        // Handle potential ContentChunk[] type
-        let textToSplit: string;
-        if (Array.isArray(generatedText)) {
-            textToSplit = generatedText.map(chunk => chunk.toString()).join('\n');
-        } else {
-            textToSplit = generatedText as string;
-        }
-
-        // Flexible split
-        const parts = textToSplit.split(/---\s*Cover Letter\s*---/i);
-        if (parts.length < 2) {
-            console.error('Failed to parse AI response into resume and cover letter', parts);
-            throw new Error('Failed to parse AI response');
-        }
-
-        const tailoredResumeContent = parts[0].replace(/---\s*Tailored Resume\s*---/i, '').trim();
-        const coverLetterContent = parts[1].trim();
-        console.log('Generated tailored resume and cover letter content');
-
-        const applicationId = uuidv4();
-        const tailoredResumeKey = `tailored - resumes / ${resumeKey} -${applicationId}.html`;
-        const coverLetterKey = `cover - letters / ${resumeKey} -${applicationId}.html`;
-
-        console.log(`Uploading tailored resume to S3 with key: ${tailoredResumeKey} `);
-        await uploadToS3({
-            Bucket: process.env.S3_BUCKET_NAME!,
-            Key: tailoredResumeKey,
-            Body: tailoredResumeContent,
-            ContentType: 'text/html',
-        });
-
-        console.log(`Uploading cover letter to S3 with key: ${coverLetterKey} `);
-        await uploadToS3({
-            Bucket: process.env.S3_BUCKET_NAME!,
-            Key: coverLetterKey,
-            Body: coverLetterContent,
-            ContentType: 'text/html',
-        });
-        console.log('Both documents uploaded successfully');
-
-        return NextResponse.json({
-            resumeKey,
-            tailoredResumeKey,
-            coverLetterKey,
-        });
-    } catch (error) {
-        console.error('Error in ai-resume endpoint:', error);
-        return NextResponse.json({ error: 'Failed to generate documents' }, { status: 500 });
+    if (!chatResponse.choices || chatResponse.choices.length === 0) {
+      console.error('No choices found in AI response');
+      throw new Error('No choices found in AI response');
     }
+
+    const generatedText = chatResponse.choices[0].message.content;
+    if (!generatedText) {
+      console.error('Generated text is null or undefined');
+      throw new Error('Generated text is null or undefined');
+    }
+
+    console.log('Generated text:', generatedText);
+
+    let textToSplit: string;
+    if (Array.isArray(generatedText)) {
+      textToSplit = generatedText.map(chunk => chunk.toString()).join('\n');
+    } else {
+      textToSplit = generatedText as string;
+    }
+
+    const parts = textToSplit.split(/---\s*Cover Letter\s*---/i);
+    if (parts.length < 2) {
+      console.error('Failed to parse AI response into resume and cover letter', parts);
+      throw new Error('Failed to parse AI response');
+    }
+
+    const tailoredResumeContent = parts[0].replace(/---\s*Tailored Resume\s*---/i, '').trim();
+    const coverLetterContent = parts[1].trim();
+    console.log('Generated tailored resume and cover letter content');
+
+    // Organize S3 paths by company name and position
+    const applicationId = uuidv4();
+    const tailoredResumeKey = `users/${userId}/tailored-resumes/${jobPostingFolder}/${resumeKey}-${applicationId}.html`;
+    const coverLetterKey = `users/${userId}/cover-letters/${jobPostingFolder}/${resumeKey}-${applicationId}.html`;
+
+    console.log(`Uploading tailored resume to S3 with key: ${tailoredResumeKey}`);
+    await uploadToS3({
+      Bucket: process.env.S3_BUCKET_NAME!,
+      Key: tailoredResumeKey,
+      Body: tailoredResumeContent,
+      ContentType: 'text/html',
+    });
+
+    console.log(`Uploading cover letter to S3 with key: ${coverLetterKey}`);
+    await uploadToS3({
+      Bucket: process.env.S3_BUCKET_NAME!,
+      Key: coverLetterKey,
+      Body: coverLetterContent,
+      ContentType: 'text/html',
+    });
+    console.log('Both documents uploaded successfully');
+
+    // Store application metadata in Supabase for easier retrieval
+    const { error: insertError } = await supabase
+      .from('resume_application')
+      .insert({
+        user_id: userId,
+        resume_key: resumeKey,
+        company_name: companyName,
+        position: position,
+        tailored_resume_key: tailoredResumeKey,
+        cover_letter_key: coverLetterKey,
+        job_description: jobDescription,
+        created_at: new Date().toISOString(),
+      });
+
+    if (insertError) {
+      console.error('Error storing job application metadata:', insertError);
+      return NextResponse.json({ error: 'Failed to store application metadata' }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      resumeKey,
+      tailoredResumeKey,
+      coverLetterKey,
+    });
+  } catch (error) {
+    console.error('Error in ai-resume endpoint:', error);
+    return NextResponse.json({ error: 'Failed to generate documents' }, { status: 500 });
+  }
 }
