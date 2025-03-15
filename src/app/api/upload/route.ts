@@ -6,6 +6,18 @@ import { Readable } from 'stream';
 import { Buffer } from 'buffer';
 import { getCurrentUser } from '../auth/get-current-user/route';
 import { createClient } from '@supabase/supabase-js';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = global.prisma || new PrismaClient();
+if (process.env.NODE_ENV === "development") global.prisma = prisma;
+(async () => {
+    try {
+        await prisma.$connect();
+        console.log("Prisma client connected to database");
+    } catch (error) {
+        console.error("Prisma client failed to connect:", error);
+    }
+})();
 
 // Initialize Supabase client
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!);
@@ -26,10 +38,12 @@ interface OCRResponse {
 
 export async function POST(req: NextRequest) {
     try {
-        const user = await getCurrentUser(req);
-        if (!user) {
+        const userData = await getCurrentUser(req);
+        if (!userData) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+
+        const { user, supabase: authenticatedSupabase } = userData;
 
         console.log('Starting resume upload process...');
         const formData = await req.formData();
@@ -39,6 +53,7 @@ export async function POST(req: NextRequest) {
             console.error('No file provided in request');
             return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
         }
+
 
         const userId = user.id;
         console.log(`User ID: ${userId}`);
@@ -114,19 +129,33 @@ export async function POST(req: NextRequest) {
         console.log('Extracted text uploaded successfully');
 
         // Store resume metadata in Supabase for easier retrieval
-        const { error: insertError } = await supabase
-            .from('resume')
-            .insert({
-                user_id: userId,
-                file_name: file.name,
-                resume_key: resumeKey,
-                created_at: new Date().toISOString(),
-            });
+        // const { error: insertError } = await supabase
+        //     .from('resume')
+        //     .insert({
+        //         userId: userId,
+        //         fileName: file.name,
+        //         resumeKey: resumeKey,
+        //         createdAt: new Date().toISOString(),
+        //     });
 
-        if (insertError) {
-            console.error('Error storing resume metadata:', insertError);
+        try {
+            await prisma.resume.create({
+                data: {
+                    userId: userId,
+                    fileName: file.name,
+                    resumeKey: resumeKey,
+                    createdAt: new Date().toISOString(),
+                }
+            });
+            console.log('Resume metadata stored successfully with Prisma');
+        } catch (error) {
+            console.error('Error storing resume metadata with Prisma:', error);
             return NextResponse.json({ error: 'Failed to store resume metadata' }, { status: 500 });
         }
+        // if (insertError) {
+        //     console.error('Error storing resume metadata:', insertError);
+        //     return NextResponse.json({ error: 'Failed to store resume metadata' }, { status: 500 });
+        // }
 
         return NextResponse.json({ key: resumeKey });
     } catch (error) {

@@ -11,8 +11,14 @@ export async function getCurrentUser(req: NextRequest) {
     const accessToken = cookies['supabase-auth-token'];
     if (!accessToken) return null;
 
-    const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+    const supabaseWithAuth = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!, {
+        global: {
+            headers: { Authorization: `Bearer ${accessToken}` },
+        },
+    });
+
+    const { data: { user }, error } = await supabaseWithAuth.auth.getUser(accessToken);
     if (error || !user) return null;
 
-    return user;
+    return { user, supabase: supabaseWithAuth };
 }

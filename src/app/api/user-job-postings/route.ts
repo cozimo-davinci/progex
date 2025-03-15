@@ -1,39 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '../auth/get-current-user/route';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!);
+import { prisma } from '../../lib/prisma';
 
 export async function GET(req: NextRequest) {
-    const user = await getCurrentUser(req);
-    if (!user) {
+    const userData = await getCurrentUser(req);
+    if (!userData) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { user } = userData;
+    console.log('User ID:', user.id); // Log the user ID to verify
     const userId = user.id;
 
     try {
-        const { data: applications, error } = await supabase
-            .from('job_applications')
-            .select('resume_key, company_name, position, tailored_resume_key, cover_letter_key')
-            .eq('user_id', userId);
-
-        if (error) {
-            console.error('Error fetching job applications:', error);
-            return NextResponse.json({ error: 'Failed to fetch job applications' }, { status: 500 });
-        }
+        console.log('Executing resume_application.findMany with user_id:', userId); // Debug log
+        const applications = await prisma.resume_application.findMany({
+            where: { userId: userId },
+            select: {
+                resumeKey: true,
+                companyName: true,
+                position: true,
+                tailoredResumeKey: true,
+                coverLetterKey: true,
+            },
+        });
+        console.log('Applications fetched:', applications); // Debug log
 
         const formattedApplications = applications.map(app => ({
-            resumeKey: app.resume_key,
-            companyName: app.company_name,
+            resumeKey: app.resumeKey,
+            companyName: app.companyName,
             position: app.position,
-            tailoredResumeKey: app.tailored_resume_key,
-            coverLetterKey: app.cover_letter_key,
+            tailoredResumeKey: app.tailoredResumeKey,
+            coverLetterKey: app.coverLetterKey,
         }));
 
         return NextResponse.json({ applications: formattedApplications });
-    } catch (error) {
-        console.error('Error in user-job-postings endpoint:', error);
+    } catch (error: any) {
+        console.error('Error fetching job applications:', error); // Log the full error
+        if (error instanceof Error) {
+            console.error('Error message:', error.message);
+            console.error('Error stack:', error.stack);
+        }
         return NextResponse.json({ error: 'Failed to fetch job applications' }, { status: 500 });
+    } finally {
+        await prisma.$disconnect();
     }
 }

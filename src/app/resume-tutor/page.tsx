@@ -53,7 +53,9 @@ const ResumeTutor = () => {
                 const response = await fetch("/api/user-resumes");
                 if (response.ok) {
                     const { resumes } = await response.json();
-                    setPreviousResumes(resumes);
+                    setPreviousResumes(resumes || []);
+                } else {
+                    console.error('Failed to fetch resumes:', await response.text());
                 }
             } catch (error) {
                 console.error("Error fetching previous resumes:", error);
@@ -65,10 +67,9 @@ const ResumeTutor = () => {
                 const response = await fetch("/api/user-job-postings");
                 if (response.ok) {
                     const { applications } = await response.json();
-                    setPastApplications(applications);
-                    // Initialize applications state with past applications
+                    setPastApplications(applications || []);
                     const loadedApplications = await Promise.all(
-                        applications.map(async (app: PastApplication) => {
+                        (applications || []).map(async (app: PastApplication) => {
                             const [resumeRes, coverRes, signedUrlRes] = await Promise.all([
                                 fetch(`/api/s3-content?key=${app.tailoredResumeKey}`),
                                 fetch(`/api/s3-content?key=${app.coverLetterKey}`),
@@ -91,6 +92,8 @@ const ResumeTutor = () => {
                         })
                     );
                     setApplications(loadedApplications);
+                } else {
+                    console.error('Failed to fetch applications:', await response.text());
                 }
             } catch (error) {
                 console.error("Error fetching past applications:", error);
