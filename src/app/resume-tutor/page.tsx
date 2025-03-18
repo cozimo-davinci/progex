@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@components/ui/input";
@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import debounce from "lodash/debounce";
 import TipTapEditor from "@components/ui/TipTapEditor";
 import { v4 as uuidv4 } from 'uuid';
-import { useRef } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 interface JobApplication {
     id: string;
@@ -50,6 +50,8 @@ const ResumeTutor = () => {
     const [selectedApplication, setSelectedApplication] = useState<string | null>(null);
     const [previousResumes, setPreviousResumes] = useState<PreviousResume[]>([]);
     const [pastApplications, setPastApplications] = useState<PastApplication[]>([]);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [downloadType, setDownloadType] = useState<'resume' | 'cover-letter' | null>(null);
 
     // Fetch previous resumes and past applications on mount
     useEffect(() => {
@@ -155,7 +157,6 @@ const ResumeTutor = () => {
                     originalResumeUrl: url,
                 }]);
                 setSelectedApplication(tempID);
-                // Refresh previous resumes
                 const resumesResponse = await fetch("/api/user-resumes");
                 if (resumesResponse.ok) {
                     const { resumes } = await resumesResponse.json();
@@ -197,7 +198,6 @@ const ResumeTutor = () => {
                 });
                 setSelectedApplication(id);
 
-                // Refresh past applications
                 const applicationsResponse = await fetch("/api/user-job-postings");
                 if (applicationsResponse.ok) {
                     const { applications: updatedApps } = await applicationsResponse.json();
@@ -215,6 +215,45 @@ const ResumeTutor = () => {
         }
     };
 
+    const handleDownload = async (format: 'pdf' | 'docx') => {
+        if (!downloadType || !currentApp) return;
+
+        const key = downloadType === 'resume' ? currentApp.tailoredResumeKey : currentApp.coverLetterKey;
+        if (!key) {
+            toast.error('Document not available');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/download-document', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key, format }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to download document');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${currentApp.companyName}-${currentApp.position}-${downloadType}.${format}`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            toast.success(`Downloaded ${downloadType} as ${format.toUpperCase()}`);
+        } catch (error) {
+            console.error('Error downloading document:', error);
+            toast.error('Failed to download document');
+        } finally {
+            setIsModalOpen(false);
+            setDownloadType(null);
+        }
+    };
+
     const currentApp = applications.find(app => app.id === selectedApplication);
 
     return (
@@ -226,7 +265,6 @@ const ResumeTutor = () => {
                 {/* Past Documents Section */}
                 <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
                     <Label className="text-xl font-bold mb-4 block dark:text-white text-white">Your Past Documents</Label>
-                    {/* Previous Initial Resumes */}
                     {previousResumes.length > 0 && (
                         <div className="mb-4">
                             <Label htmlFor="previous-resumes" className="text-lg font-semibold mb-2 block dark:text-white text-white">Select Previous Initial Resume</Label>
@@ -269,29 +307,24 @@ const ResumeTutor = () => {
                             </select>
                         </div>
                     )}
-                    {/* Past Tailored Applications */}
                     {pastApplications.length > 0 && (
                         <div className="bg-black rounded-lg shadow-sm py-2 px-2 shadow-white">
                             <Label className="text-lg font-semibold mb-2 block dark:text-white text-white">Past Tailored Applications</Label>
                             <ul className="list-disc pl-5 text-white">
                                 {pastApplications.map(app => (
-                                    // <li key={`${app.resumeKey}-${app.companyName}-${app.position}`}>
                                     <li key={`${app.id}-${app.resumeKey}-${app.companyName}-${app.position}`}>
-                                        {/* {app.companyName} - {app.position} (Resume: {app.resumeKey.split('/').pop()}) */}
                                         {app.companyName} - {app.position}
                                         <Button
                                             variant="outline"
-                                            className="ml-20 text-yellow-500 mt-2 mb-1 dark:border-white  justify-end"
+                                            className="ml-20 text-yellow-500 mt-2 mb-1 dark:border-white justify-end"
                                             onClick={() => {
                                                 setSelectedApplication(app.id);
                                                 setTimeout(() => {
                                                     if (resultsRef.current) {
-                                                        resultsRef.current.scrollIntoView({ behavior: "smooth" })
+                                                        resultsRef.current.scrollIntoView({ behavior: "smooth" });
                                                     }
-                                                }, 300)
-
-                                            }
-                                            }
+                                                }, 300);
+                                            }}
                                         >
                                             View
                                         </Button>
@@ -329,8 +362,11 @@ const ResumeTutor = () => {
                     <Input id="prompt" placeholder="E.g., Tailor my resume based on the job description." value={prompt} onChange={(e) => setPrompt(e.target.value)} className="dark:border-purple-500" />
                 </div>
                 {/* Button */}
-                <Button className="mt-4 text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
-                    onClick={handleReceiveSuggestions} disabled={isProcessing}>
+                <Button
+                    className="mt-4 text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
+                    onClick={handleReceiveSuggestions}
+                    disabled={isProcessing}
+                >
                     {isProcessing ? "Processing..." : "Receive Suggestions"}
                 </Button>
                 {/* Application Selection */}
@@ -356,6 +392,49 @@ const ResumeTutor = () => {
             {currentApp && (
                 <div ref={resultsRef} className="relative z-10 w-full h-screen md:w-4/5 mt-10 bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
                     <Label className="text-xl font-bold mb-4 block dark:text-white text-white">Results</Label>
+                    <div className="flex justify-end space-x-4 mb-4">
+                        <Dialog open={isModalOpen && downloadType === 'resume'} onOpenChange={setIsModalOpen}>
+                            <DialogTrigger asChild>
+                                <Button
+                                    onClick={() => setDownloadType('resume')}
+                                    disabled={!currentApp.tailoredResumeKey}
+                                    className="text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
+                                >
+                                    Download Tailored Resume
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader>
+                                    <DialogTitle>Choose Download Format for Resume</DialogTitle>
+                                </DialogHeader>
+                                <div className="flex justify-around mt-4">
+                                    <Button onClick={() => handleDownload('pdf')}>PDF</Button>
+                                    <Button onClick={() => handleDownload('docx')}>DOCX</Button>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+
+                        <Dialog open={isModalOpen && downloadType === 'cover-letter'} onOpenChange={setIsModalOpen}>
+                            <DialogTrigger asChild>
+                                <Button
+                                    onClick={() => setDownloadType('cover-letter')}
+                                    disabled={!currentApp.coverLetterKey}
+                                    className="text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
+                                >
+                                    Download Cover Letter
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader>
+                                    <DialogTitle>Choose Download Format for Cover Letter</DialogTitle>
+                                </DialogHeader>
+                                <div className="flex justify-around mt-4">
+                                    <Button onClick={() => handleDownload('pdf')}>PDF</Button>
+                                    <Button onClick={() => handleDownload('docx')}>DOCX</Button>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+                    </div>
                     <Tabs defaultValue="original" className="w-full h-full">
                         <TabsList className="grid w-full grid-cols-3">
                             <TabsTrigger value="original">Original Resume</TabsTrigger>
