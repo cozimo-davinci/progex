@@ -8,8 +8,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import debounce from "lodash/debounce";
 import TipTapEditor from "@components/ui/TipTapEditor";
+import { v4 as uuidv4 } from 'uuid';
+import { useRef } from "react";
 
 interface JobApplication {
+    id: string;
     resumeKey: string;
     tailoredResumeKey: string;
     coverLetterKey: string;
@@ -27,6 +30,7 @@ interface PreviousResume {
 }
 
 interface PastApplication {
+    id: string;
     resumeKey: string;
     companyName: string;
     position: string;
@@ -35,6 +39,7 @@ interface PastApplication {
 }
 
 const ResumeTutor = () => {
+    const resultsRef = useRef<HTMLDivElement>(null);
     const [resumeKey, setResumeKey] = useState<string | null>(null);
     const [jobDescription, setJobDescription] = useState("");
     const [prompt, setPrompt] = useState("");
@@ -79,6 +84,7 @@ const ResumeTutor = () => {
                             const coverData = await coverRes.json();
                             const signedUrlData = await signedUrlRes.json();
                             return {
+                                id: app.id,
                                 resumeKey: app.resumeKey,
                                 tailoredResumeKey: app.tailoredResumeKey,
                                 coverLetterKey: app.coverLetterKey,
@@ -137,7 +143,9 @@ const ResumeTutor = () => {
                 setResumeKey(key);
                 const signedUrlRes = await fetch(`/api/get-signed-url?key=${key}`);
                 const { url } = await signedUrlRes.json();
+                const tempID = uuidv4();
                 setApplications(prev => [...prev, {
+                    id: tempID,
                     resumeKey: key,
                     tailoredResumeKey: "",
                     coverLetterKey: "",
@@ -146,7 +154,7 @@ const ResumeTutor = () => {
                     coverLetterContent: "",
                     originalResumeUrl: url,
                 }]);
-                setSelectedApplication(key);
+                setSelectedApplication(tempID);
                 // Refresh previous resumes
                 const resumesResponse = await fetch("/api/user-resumes");
                 if (resumesResponse.ok) {
@@ -173,7 +181,7 @@ const ResumeTutor = () => {
                 body: JSON.stringify({ resumeKey, jobDescription, prompt, companyName, position }),
             });
             if (response.ok) {
-                const { resumeKey: returnedResumeKey, tailoredResumeKey, coverLetterKey } = await response.json();
+                const { resumeKey: returnedResumeKey, tailoredResumeKey, coverLetterKey, id } = await response.json();
                 const resumeRes = await fetch(`/api/s3-content?key=${tailoredResumeKey}`);
                 const { content: resumeContent } = await resumeRes.json();
                 const coverRes = await fetch(`/api/s3-content?key=${coverLetterKey}`);
@@ -182,12 +190,12 @@ const ResumeTutor = () => {
                 setApplications(prev => {
                     const updated = prev.map(app =>
                         app.resumeKey === returnedResumeKey
-                            ? { ...app, tailoredResumeKey, coverLetterKey, jobDescription, tailoredResumeContent: resumeContent || "", coverLetterContent: coverContent || "", companyName, position }
+                            ? { ...app, id, tailoredResumeKey, coverLetterKey, jobDescription, tailoredResumeContent: resumeContent || "", coverLetterContent: coverContent || "", companyName, position }
                             : app
                     );
                     return updated;
                 });
-                setSelectedApplication(returnedResumeKey);
+                setSelectedApplication(id);
 
                 // Refresh past applications
                 const applicationsResponse = await fetch("/api/user-job-postings");
@@ -207,7 +215,7 @@ const ResumeTutor = () => {
         }
     };
 
-    const currentApp = applications.find(app => app.resumeKey === selectedApplication);
+    const currentApp = applications.find(app => app.id === selectedApplication);
 
     return (
         <div className="min-h-screen flex flex-col items-center justify-center p-4 rounded-lg relative border-t-4 dark:border-t-yellow-500 border-t-black" style={{ backgroundImage: "url('/images/resume-background-picture.png')", backgroundSize: "cover", backgroundPosition: "center", backgroundRepeat: "no-repeat" }}>
@@ -236,6 +244,7 @@ const ResumeTutor = () => {
                                                 const existingApp = applications.find(app => app.resumeKey === selectedKey);
                                                 if (!existingApp) {
                                                     setApplications(prev => [...prev, {
+                                                        id: "",
                                                         resumeKey: selectedKey,
                                                         tailoredResumeKey: "",
                                                         coverLetterKey: "",
@@ -262,16 +271,27 @@ const ResumeTutor = () => {
                     )}
                     {/* Past Tailored Applications */}
                     {pastApplications.length > 0 && (
-                        <div>
+                        <div className="bg-black rounded-lg shadow-sm py-2 px-2 shadow-white">
                             <Label className="text-lg font-semibold mb-2 block dark:text-white text-white">Past Tailored Applications</Label>
                             <ul className="list-disc pl-5 text-white">
                                 {pastApplications.map(app => (
-                                    <li key={`${app.resumeKey}-${app.companyName}-${app.position}`}>
-                                        {app.companyName} - {app.position} (Resume: {app.resumeKey.split('/').pop()})
+                                    // <li key={`${app.resumeKey}-${app.companyName}-${app.position}`}>
+                                    <li key={`${app.id}-${app.resumeKey}-${app.companyName}-${app.position}`}>
+                                        {/* {app.companyName} - {app.position} (Resume: {app.resumeKey.split('/').pop()}) */}
+                                        {app.companyName} - {app.position}
                                         <Button
-                                            variant="link"
-                                            className="ml-2 text-yellow-500"
-                                            onClick={() => setSelectedApplication(app.resumeKey)}
+                                            variant="outline"
+                                            className="ml-20 text-yellow-500 mt-2 mb-1 dark:border-white  justify-end"
+                                            onClick={() => {
+                                                setSelectedApplication(app.id);
+                                                setTimeout(() => {
+                                                    if (resultsRef.current) {
+                                                        resultsRef.current.scrollIntoView({ behavior: "smooth" })
+                                                    }
+                                                }, 300)
+
+                                            }
+                                            }
                                         >
                                             View
                                         </Button>
@@ -324,7 +344,7 @@ const ResumeTutor = () => {
                         >
                             <option value="">Select an application</option>
                             {applications.map(app => (
-                                <option key={app.resumeKey} value={app.resumeKey}>
+                                <option key={app.id} value={app.id}>
                                     {app.companyName && app.position ? `${app.companyName} - ${app.position}` : `Resume: ${app.resumeKey.split('/').pop()}`}
                                 </option>
                             ))}
@@ -334,7 +354,7 @@ const ResumeTutor = () => {
             </div>
             {/* Results */}
             {currentApp && (
-                <div className="relative z-10 w-full h-screen md:w-4/5 mt-10 bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
+                <div ref={resultsRef} className="relative z-10 w-full h-screen md:w-4/5 mt-10 bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
                     <Label className="text-xl font-bold mb-4 block dark:text-white text-white">Results</Label>
                     <Tabs defaultValue="original" className="w-full h-full">
                         <TabsList className="grid w-full grid-cols-3">

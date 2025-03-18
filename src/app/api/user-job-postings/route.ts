@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
         const applications = await prisma.resume_application.findMany({
             where: { userId: userId },
             select: {
+                id: true,
                 resumeKey: true,
                 companyName: true,
                 position: true,
@@ -27,6 +28,7 @@ export async function GET(req: NextRequest) {
         console.log('Applications fetched:', applications); // Debug log
 
         const formattedApplications = applications.map(app => ({
+            id: app.id.toString(),
             resumeKey: app.resumeKey,
             companyName: app.companyName,
             position: app.position,

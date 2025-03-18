@@ -212,6 +212,7 @@ export async function POST(req: NextRequest) {
       resumeKey,
       tailoredResumeKey,
       coverLetterKey,
+      id: prismaResponse.id.toString(),
     });
   } catch (error: any) {
     console.error('Error in ai-resume endpoint:', error || 'Unknown error');
