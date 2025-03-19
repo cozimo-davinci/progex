@@ -7,10 +7,9 @@ import {
     TextRun,
     HeadingLevel,
     Numbering,
-    IChildElement,
     INumberingOptions,
-    ILevels,
     AlignmentType,
+    UnderlineType, // Added import
 } from 'docx';
 import { Parser } from 'htmlparser2';
 import { DomHandler, Element, Node, Text } from 'domhandler';
@@ -78,11 +77,25 @@ const numberingOptions: INumberingOptions = {
     ],
 };
 
+// Interface to hold text and formatting options
+interface TextRunOptions {
+    text: string;
+    size?: number;
+    bold?: boolean;
+    italics?: boolean;
+    underline?: { type: (typeof UnderlineType)[keyof typeof UnderlineType] };
+    color?: string;
+    break?: number;
+}
+
 // Convert HTML to docx elements
-function htmlToDocxElements(htmlString: string): IChildElement[] {
-    const elements: IChildElement[] = [];
+function htmlToDocxElements(htmlString: string): Paragraph[] {
+    const elements: Paragraph[] = [];
     let currentList: { type: 'bullet' | 'ordered'; items: Paragraph[] } | null = null;
     let listLevel = 0;
+
+    // Log the raw HTML for debugging
+    console.log('Raw HTML input:', htmlString);
 
     const handler = new DomHandler((error, dom) => {
         if (error) {
@@ -127,30 +140,36 @@ function htmlToDocxElements(htmlString: string): IChildElement[] {
                             reference: currentList.type === 'bullet' ? 'bullet-list' : 'ordered-list',
                             level: listLevel,
                         },
+                        spacing: { after: 200 }, // Add spacing after list items
                     });
                     currentList.items.push(paragraph);
                     return;
                 }
 
-                // Handle headings
+                // Handle headings (h1 to h6)
                 if (tag.name.match(/^h[1-6]$/)) {
                     const headingLevel = parseInt(tag.name.replace('h', '')) - 1;
                     const headingChildren: TextRun[] = [];
+                    console.log(`Found heading: <${tag.name}>`, getChildren(tag).map(child => (child as Text).data).filter(Boolean).join(''));
                     getChildren(tag).forEach(child => {
                         const runs = processInlineNode(child);
                         headingChildren.push(...runs);
                     });
-                    elements.push(
-                        new Paragraph({
-                            children: headingChildren,
-                            heading: headingLevel === 0 ? HeadingLevel.HEADING_1 :
-                                headingLevel === 1 ? HeadingLevel.HEADING_2 :
-                                    headingLevel === 2 ? HeadingLevel.HEADING_3 :
-                                        headingLevel === 3 ? HeadingLevel.HEADING_4 :
-                                            headingLevel === 4 ? HeadingLevel.HEADING_5 :
-                                                HeadingLevel.HEADING_6,
-                        })
-                    );
+                    if (headingChildren.length === 0) {
+                        console.log(`Skipping empty heading: <${tag.name}>`);
+                        return;
+                    }
+                    const heading = new Paragraph({
+                        children: headingChildren,
+                        heading: headingLevel === 0 ? HeadingLevel.HEADING_1 :
+                            headingLevel === 1 ? HeadingLevel.HEADING_2 :
+                                headingLevel === 2 ? HeadingLevel.HEADING_3 :
+                                    headingLevel === 3 ? HeadingLevel.HEADING_4 :
+                                        headingLevel === 4 ? HeadingLevel.HEADING_5 :
+                                            HeadingLevel.HEADING_6,
+                        spacing: { before: 240, after: 120 },
+                    });
+                    elements.push(heading);
                     return;
                 }
 
@@ -161,32 +180,55 @@ function htmlToDocxElements(htmlString: string): IChildElement[] {
                         const runs = processInlineNode(child);
                         paragraphChildren.push(...runs);
                     });
-                    elements.push(
-                        new Paragraph({
-                            children: paragraphChildren,
-                        })
-                    );
+                    if (paragraphChildren.length === 0) {
+                        return;
+                    }
+                    const paragraph = new Paragraph({
+                        children: paragraphChildren,
+                        spacing: { after: 200 },
+                    });
+                    elements.push(paragraph);
                     return;
                 }
 
-                // Handle other block elements (e.g., div) by treating them as paragraphs
+                // Handle other block elements (e.g., div)
                 if (tag.name === 'div') {
                     getChildren(tag).forEach(child => processNode(child, level));
                     return;
                 }
 
-                // Handle inline elements by processing their children
+                // Handle inline elements
                 getChildren(tag).forEach(child => processNode(child, level));
+            } else if (isText(node)) {
+                const text = (node as Text).data.trim();
+                if (text) {
+                    console.log('Found stray text node:', text);
+                    const paragraph = new Paragraph({
+                        children: [new TextRun({
+                            text,
+                            size: 26,
+                        })],
+                        spacing: { after: 200 },
+                    });
+                    elements.push(paragraph);
+                }
             }
         }
 
-        function processInlineNode(node: Node): TextRun[] {
+        function processInlineNode(node: Node, options: TextRunOptions = { text: '' }): TextRun[] {
             const runs: TextRun[] = [];
 
             if (isText(node)) {
                 const text = (node as Text).data.trim();
                 if (text) {
-                    runs.push(new TextRun(text));
+                    runs.push(new TextRun({
+                        text,
+                        size: 26,
+                        bold: options.bold,
+                        italics: options.italics,
+                        underline: options.underline,
+                        color: options.color,
+                    }));
                 }
                 return runs;
             }
@@ -195,46 +237,57 @@ function htmlToDocxElements(htmlString: string): IChildElement[] {
                 const tag = node as Element;
                 const children = getChildren(tag);
 
-                // Handle inline formatting
                 if (tag.name === 'strong' || tag.name === 'b') {
                     children.forEach(child => {
-                        const childRuns = processInlineNode(child);
-                        childRuns.forEach(run => {
-                            runs.push(new TextRun({ ...run, bold: true }));
-                        });
+                        const childRuns = processInlineNode(child, { ...options, bold: true });
+                        runs.push(...childRuns);
                     });
                     return runs;
                 }
 
                 if (tag.name === 'em' || tag.name === 'i') {
                     children.forEach(child => {
-                        const childRuns = processInlineNode(child);
-                        childRuns.forEach(run => {
-                            runs.push(new TextRun({ ...run, italics: true }));
-                        });
+                        const childRuns = processInlineNode(child, { ...options, italics: true });
+                        runs.push(...childRuns);
                     });
                     return runs;
                 }
 
                 if (tag.name === 'u') {
                     children.forEach(child => {
-                        const childRuns = processInlineNode(child);
-                        childRuns.forEach(run => {
-                            runs.push(new TextRun({ ...run, underline: { type: 'single' } }));
-                        });
+                        const childRuns = processInlineNode(child, { ...options, underline: { type: 'single' } });
+                        runs.push(...childRuns);
                     });
                     return runs;
                 }
 
-                // Handle line breaks
                 if (tag.name === 'br') {
-                    runs.push(new TextRun({ break: 1 }));
+                    runs.push(new TextRun({ break: 1, size: 26 }));
                     return runs;
                 }
 
-                // Process children of other inline tags
+                if (tag.name === 'a') {
+                    const href = tag.attribs.href || '';
+                    let linkText = '';
+                    children.forEach(child => {
+                        if (isText(child)) {
+                            linkText += (child as Text).data.trim();
+                        } else if (isTag(child)) {
+                            const nestedText = getTextFromNode(child);
+                            linkText += nestedText;
+                        }
+                    });
+                    runs.push(new TextRun({
+                        text: linkText || href,
+                        size: 26,
+                        underline: { type: 'single' },
+                        color: '0000FF',
+                    }));
+                    return runs;
+                }
+
                 children.forEach(child => {
-                    const childRuns = processInlineNode(child);
+                    const childRuns = processInlineNode(child, options);
                     runs.push(...childRuns);
                 });
             }
@@ -242,10 +295,23 @@ function htmlToDocxElements(htmlString: string): IChildElement[] {
             return runs;
         }
 
+        // Helper function to recursively get text from nodes
+        function getTextFromNode(node: Node): string {
+            if (isText(node)) {
+                return (node as Text).data.trim();
+            } else if (isTag(node)) {
+                let text = '';
+                getChildren(node).forEach(child => {
+                    text += getTextFromNode(child);
+                });
+                return text;
+            }
+            return '';
+        }
+
         dom.forEach(node => processNode(node));
     });
 
-    // Parse the HTML
     const parser = new Parser(handler, { decodeEntities: true });
     parser.write(htmlString);
     parser.end();
@@ -264,12 +330,10 @@ export async function POST(req: NextRequest) {
 
     const { key, format } = await req.json();
 
-    // Validate input
     if (!key || !format) {
         return NextResponse.json({ error: 'Missing key or format' }, { status: 400 });
     }
 
-    // Ensure the key belongs to the current user
     if (!key.startsWith(`users/${userId}/`)) {
         console.log('Access denied: Key does not belong to user', { key, userId });
         return NextResponse.json({ error: 'Access denied' }, { status: 403 });
@@ -290,12 +354,11 @@ export async function POST(req: NextRequest) {
             const browser = await puppeteer.launch({ headless: true });
             const page = await browser.newPage();
             await page.setContent(htmlString, { waitUntil: 'networkidle0' });
-            fileBuffer = await page.pdf({ format: 'A4' }); // Returns Uint8Array
+            fileBuffer = await page.pdf({ format: 'A4' });
             await browser.close();
             contentType = 'application/pdf';
             fileExtension = 'pdf';
         } else if (format === 'docx') {
-            // Convert HTML to docx elements
             const docxElements = htmlToDocxElements(htmlString);
             const doc = new Document({
                 numbering: numberingOptions,
@@ -303,7 +366,6 @@ export async function POST(req: NextRequest) {
                     children: docxElements,
                 }],
             });
-            // Generate DOCX buffer
             const buffer = await Packer.toBuffer(doc);
             fileBuffer = new Uint8Array(buffer);
             contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';

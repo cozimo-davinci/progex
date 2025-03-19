@@ -52,71 +52,79 @@ export async function POST(req: NextRequest) {
 
     // Generate tailored documents using Mistral AI
     const aiPrompt = `
-            You are an AI assistant specialized in resume tailoring and cover letter writing. Given the following information:
-            
-            1. Extracted resume text (in Markdown format):
-            ${extractedText}
-            
-            2. Job description:
-            ${jobDescription}
-            
-            3. User's prompt:
-            ${prompt}
-            
-            Please generate two documents in HTML format:
-            
-            First, a tailored resume that highlights the candidate's skills and experiences relevant to the job description, following the user's prompt, while preserving the original resume's formatting style as described below.
-            
-            Second, a unique and humanized cover letter that showcases the candidate's fit for the position based on their resume and the job description. Ensure the cover letter is not generic and stands out.
-            
-            ### Formatting Instructions for the Tailored Resume
-            
-            The original resume is provided in Markdown format. Use the Markdown structure to infer the original formatting and apply the following rules to preserve its style in the HTML output:
-            
-            - **Headings**:
-              - Convert Markdown headings to HTML headings. For example, '# OBJECTIVE' should become <h1 style="text-transform: uppercase; font-weight: bold; margin-bottom: 15px;">OBJECTIVE</h1>, and '## RELEVANT EXPERIENCE' should become <h2 style="font-weight: bold; margin-bottom: 10px;">RELEVANT EXPERIENCE</h2>.
-            
-            - **Contact Information**:
-              - The first line of the resume should be converted to a paragraph with inline links for email and LinkedIn, separated by pipes. For example: <p>905-971-4242 | <a href="mailto:teimur.terchiev@gmail.com">teimur.terchiev@gmail.com</a> | <a href="https://www.linkedin.com/teimur-terchyyev">LinkedIn</a></p>.
-            
-            - **Bullet Points**:
-              - Identify bullet points in the extracted text (lines starting with '- ') and convert them to HTML unordered lists. Each bullet point should be a <li> tag within a <ul> tag, with a margin-bottom of 5px for spacing. For example: <ul><li style="margin-bottom: 5px;">Strong foundation in Java, Python, Kotlin, and JavaScript.</li>...</ul>.
-            
-            - **Paragraphs and Spacing**:
-              - Wrap each paragraph or block of text in <p> tags with a margin-bottom of 10px.
-              - For sections (e.g., 'OBJECTIVE', 'HIGHLIGHTS OF QUALIFICATIONS'), wrap the entire section in a <div style="margin-bottom: 20px;"> to separate sections.
-              - Ensure there are no extra <br> tags or unnecessary line breaks within the HTML output.
-            
-            - **Job Titles and Dates**:
-              - Format job titles as <h2> tags and company/dates as <p> tags with a margin-bottom of 5px. For example: <h2 style="font-weight: bold; margin-bottom: 10px;">Mobihelp Tutor/Teacher Assistant</h2><p style="margin-bottom: 5px;">George Brown College | September 2023 - April 2025 (expected)</p>.
-            
-            - **Education and Additional Info**:
-              - Format education entries with dates and program on separate lines, each in a <p> tag. Convert GitHub links to clickable links (e.g., <p><a href="https://github.com/cozimo-davinci">https://github.com/cozimo-davinci</a></p>).
-            
-            - **Links**:
-              - Preserve links in their original format. If a link is presented as a raw URL (e.g., 'https://github.com/cozimo-davinci'), convert it to a clickable link with the URL as both the href and the text (e.g., <a href="https://github.com/cozimo-davinci">https://github.com/cozimo-davinci</a>).
-              - For links embedded in text (e.g., 'LinkedIn' in the contact information), format them as specified in the **Contact Information** section.
-            
-            - **Avoid Extra Spacing**:
-              - Do not add extra line breaks or spaces between elements unless specified. For example, there should be no blank lines between job titles and their descriptions or within sections.
-            
-            ### Output Format
-            
-            Provide the tailored resume and cover letter as HTML content directly, without surrounding them with triple backticks, code blocks, or any labels like "html". The response should be structured as follows:
-            
-            --- Tailored Resume ---
-            <div>[HTML formatted tailored resume content]</div>
-            
-            --- Cover Letter ---
-            <div>[HTML formatted cover letter content]</div>
-            
-            ### Additional Notes
-            
-            - Tailor the content to match the job description and user prompt, but preserve the structure and styling as described above.
-            - For the cover letter, use a standard professional format with paragraphs, but ensure it is unique and personalized.
-            - Add 5 bullet points for each project under the 'RELEVANT EXPERIENCE' section, as specified by the user.
-            - Ensure the HTML output is clean, with no extraneous line breaks or excessive spacing beyond what is specified in the formatting instructions.
-            `;
+    You are an AI assistant specialized in resume tailoring and cover letter writing. Given the following information:
+    
+    1. Extracted resume text (in Markdown format):
+    ${extractedText}
+    
+    2. Job description:
+    ${jobDescription}
+    
+    3. User's prompt:
+    ${prompt}
+    
+    Please generate two documents in HTML format:
+    
+    First, a tailored resume that highlights the candidate's skills and experiences relevant to the job description, following the user's prompt, while preserving the original resume's formatting style as described below.
+    
+    Second, a unique and humanized cover letter that showcases the candidate's fit for the position based on their resume and the job description. Ensure the cover letter is not generic and stands out.
+    
+    ### Formatting Instructions for the Tailored Resume
+    
+    The original resume is provided in Markdown format. Use the Markdown structure to infer the original formatting and apply the following rules to preserve its style in the HTML output:
+    
+    - **Headings**:
+      - Convert Markdown headings to HTML headings. For example, '# OBJECTIVE' should become <h1 style="text-transform: uppercase; font-weight: bold; margin-bottom: 15px;">OBJECTIVE</h1>, and '## RELEVANT EXPERIENCE' should become <h2 style="font-weight: bold; margin-bottom: 10px;">RELEVANT EXPERIENCE</h2>.
+      - Do not wrap the heading text in any additional tags (e.g., <strong> or <b>). The heading text should be plain text inside the <h1> or <h2> tags.
+      - Ensure there are no extra line breaks, <br> tags, or whitespace before or after the heading tags. For example, the HTML should be <h2 style="font-weight: bold; margin-bottom: 10px;">RELEVANT EXPERIENCE</h2><p>...</p>, with no <br> or blank lines between the heading and the next element.
+    
+    - **Contact Information**:
+      - The first line of the resume should be converted to a paragraph with inline links for email and LinkedIn, separated by pipes. For example: <p>905-971-4242 | <a href="mailto:teimur.terchiev@gmail.com">teimur.terchiev@gmail.com</a> | <a href="https://www.linkedin.com/teimur-terchyyev">LinkedIn</a></p>.
+      - Ensure there are no extra <br> tags or whitespace after the contact information paragraph.
+    
+    - **Bullet Points**:
+      - Identify bullet points in the extracted text (lines starting with '- ') and convert them to HTML unordered lists. Each bullet point should be a <li> tag within a <ul> tag, with a margin-bottom of 5px for spacing. For example: <ul><li style="margin-bottom: 5px;">Strong foundation in Java, Python, Kotlin, and JavaScript.</li>...</ul>.
+      - Ensure there are no extra <br> tags or whitespace before or after the <ul> and <li> tags.
+    
+    - **Paragraphs and Spacing**:
+      - Wrap each paragraph or block of text in <p> tags with a margin-bottom of 10px.
+      - For sections (e.g., 'OBJECTIVE', 'HIGHLIGHTS OF QUALIFICATIONS'), wrap the entire section in a <div style="margin-bottom: 20px;"> to separate sections.
+      - Ensure there are no extra <br> tags, blank lines, or unnecessary whitespace within or between elements in the HTML output.
+    
+    - **Job Titles and Dates**:
+      - Format job titles as <h2> tags and company/dates as <p> tags with a margin-bottom of 5px. For example: <h2 style="font-weight: bold; margin-bottom: 10px;">Mobihelp Tutor/Teacher Assistant</h2><p style="margin-bottom: 5px;">George Brown College | September 2023 - April 2025 (expected)</p>.
+      - Do not wrap the job title text in any additional tags (e.g., <strong> or <b>).
+      - Ensure there are no extra <br> tags or whitespace between the job title and the company/dates.
+    
+    - **Education and Additional Info**:
+      - Format education entries with dates and program on separate lines, each in a <p> tag. Convert GitHub links to clickable links (e.g., <p><a href="https://github.com/cozimo-davinci">https://github.com/cozimo-davinci</a></p>).
+      - Ensure there are no extra <br> tags or whitespace between education entries.
+    
+    - **Links**:
+      - Preserve links in their original format. If a link is presented as a raw URL (e.g., 'https://github.com/cozimo-davinci'), convert it to a clickable link with the URL as both the href and the text (e.g., <a href="https://github.com/cozimo-davinci">https://github.com/cozimo-davinci</a>).
+      - For links embedded in text (e.g., 'LinkedIn' in the contact information), format them as specified in the **Contact Information** section.
+    
+    - **Strictly Avoid Extra Spacing**:
+      - Do not add extra line breaks, <br> tags, or whitespace between elements unless explicitly specified in the formatting instructions. For example, there should be no blank lines or <br> tags between a section heading (e.g., <h2>OBJECTIVE</h2>) and the following paragraph or list.
+      - Ensure the HTML output is compact, with elements directly following each other as specified (e.g., <h2>...</h2><p>...</p> with no <br> or blank lines in between).
+    
+    ### Output Format
+    
+    Provide the tailored resume and cover letter as HTML content directly, without surrounding them with triple backticks, code blocks, or any labels like "html". The response should be structured as follows:
+    
+    --- Tailored Resume ---
+    <div>[HTML formatted tailored resume content]</div>
+    
+    --- Cover Letter ---
+    <div>[HTML formatted cover letter content]</div>
+    
+    ### Additional Notes
+    
+    - Tailor the content to match the job description and user prompt, but preserve the structure and styling as described above.
+    - For the cover letter, use a standard professional format with paragraphs, but ensure it is unique and personalized.
+    - Add 5 bullet points for each project under the 'RELEVANT EXPERIENCE' section, as specified by the user.
+    - Ensure the HTML output is clean, with no extraneous line breaks, <br> tags, or excessive spacing beyond what is specified in the formatting instructions.
+    `;
     console.log('Sending prompt to Mistral AI...');
 
     const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! });
