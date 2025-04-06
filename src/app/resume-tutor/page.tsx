@@ -10,6 +10,13 @@ import debounce from "lodash/debounce";
 import TipTapEditor from "@components/ui/TipTapEditor";
 import { v4 as uuidv4 } from 'uuid';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Pie } from 'react-chartjs-2';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import { redis } from '../lib/redis';
+import { Atom } from "lucide-react";
+
+// Register Chart.js components
+ChartJS.register(ArcElement, Tooltip, Legend);
 
 interface JobApplication {
     id: string;
@@ -22,6 +29,8 @@ interface JobApplication {
     originalResumeUrl?: string;
     companyName?: string;
     position?: string;
+    credibilityScore?: number;
+    missingKeywords?: string[];
 }
 
 interface PreviousResume {
@@ -52,6 +61,21 @@ const ResumeTutor = () => {
     const [pastApplications, setPastApplications] = useState<PastApplication[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [downloadType, setDownloadType] = useState<'resume' | 'cover-letter' | null>(null);
+
+    // Credibility tab states
+    const [credibilitySelectedAppId, setCredibilitySelectedAppId] = useState<string | null>(null);
+    const [newJobDescription, setNewJobDescription] = useState("");
+    const [reAnalysisResult, setReAnalysisResult] = useState<{ score: number; missingKeywords: string[] } | null>(null);
+    const [isInitialAnalysisProcessing, setIsInitialAnalysisProcessing] = useState(false);
+    const [isReAnalysisProcessing, setIsReAnalysisProcessing] = useState(false);
+
+    const credibilitySelectedApp = applications.find(app => app.id === credibilitySelectedAppId);
+
+    // Reset re-analysis state when the selected application changes
+    useEffect(() => {
+        setReAnalysisResult(null);
+        setNewJobDescription("");
+    }, [credibilitySelectedAppId]);
 
     // Fetch previous resumes and past applications on mount
     useEffect(() => {
@@ -254,231 +278,534 @@ const ResumeTutor = () => {
         }
     };
 
+    const handleAnalyzeCredibility = async () => {
+        if (!credibilitySelectedApp || !credibilitySelectedApp.tailoredResumeKey || !credibilitySelectedApp.jobDescription) {
+            toast.error("Missing tailored resume or job description");
+            return;
+        }
+
+        setIsInitialAnalysisProcessing(true);
+        try {
+            const response = await fetch("/api/credibility-analysis", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    resumeContent: credibilitySelectedApp.tailoredResumeContent,
+                    jobDescription: credibilitySelectedApp.jobDescription,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to analyze credibility");
+            }
+
+            const { score, missingKeywords } = await response.json();
+            setApplications((prev) =>
+                prev.map((app) =>
+                    app.id === credibilitySelectedApp.id ? { ...app, credibilityScore: score, missingKeywords } : app
+                )
+            );
+
+            // Cache the job description for 24 hours (86400 seconds)
+            await redis.set(`jobDescription:${credibilitySelectedApp.id}`, credibilitySelectedApp.jobDescription, { ex: 86400 });
+
+            toast.success("Credibility analysis completed");
+        } catch (error) {
+            console.error("Error analyzing credibility:", error);
+            toast.error("Failed to analyze credibility");
+        } finally {
+            setIsInitialAnalysisProcessing(false);
+        }
+    };
+
+    const handleReAnalyze = async (jobDescription: string) => {
+        if (!credibilitySelectedApp || !credibilitySelectedApp.tailoredResumeKey) {
+            toast.error("Missing tailored resume");
+            return;
+        }
+
+        setIsReAnalysisProcessing(true);
+        try {
+            const response = await fetch("/api/credibility-analysis", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    resumeContent: credibilitySelectedApp.tailoredResumeContent,
+                    jobDescription: jobDescription,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to analyze credibility");
+            }
+
+            const { score, missingKeywords } = await response.json();
+            setReAnalysisResult({ score, missingKeywords });
+            toast.success("Re-analysis completed");
+        } catch (error) {
+            console.error("Error re-analyzing credibility:", error);
+            toast.error("Failed to re-analyze credibility");
+        } finally {
+            setIsReAnalysisProcessing(false);
+        }
+    };
+
     const currentApp = applications.find(app => app.id === selectedApplication);
 
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center p-4 rounded-lg relative border-t-4 dark:border-t-yellow-500 border-t-black" style={{ backgroundImage: "url('/images/resume-background-picture.png')", backgroundSize: "cover", backgroundPosition: "center", backgroundRepeat: "no-repeat" }}>
+        <div
+            className="min-h-screen flex flex-col items-center justify-center p-4 rounded-lg relative border-t-4 dark:border-t-yellow-500 border-t-black"
+            style={{
+                backgroundImage: "url('/images/resume-background-picture.png')",
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                backgroundRepeat: "no-repeat"
+            }}
+        >
             <div className="absolute inset-0 bg-black bg-opacity-20 rounded-lg"></div>
-            <div className="relative z-10 w-full max-w-lg">
+            <div className="relative z-10 w-full max-w-7xl">
                 <h1 className="text-3xl dark:text-white text-white text-center font-bold">Welcome to Resume Tutor</h1>
+                <Tabs defaultValue="ai-tutor" className="w-full mt-6">
+                    <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="ai-tutor">AI-Tutor</TabsTrigger>
+                        <TabsTrigger value="credibility">Credibility</TabsTrigger>
+                    </TabsList>
 
-                {/* Past Documents Section */}
-                <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
-                    <Label className="text-xl font-bold mb-4 block dark:text-white text-white">Your Past Documents</Label>
-                    {previousResumes.length > 0 && (
-                        <div className="mb-4">
-                            <Label htmlFor="previous-resumes" className="text-lg font-semibold mb-2 block dark:text-white text-white">Select Previous Initial Resume</Label>
+                    {/* AI-Tutor Tab: Existing Content */}
+                    <TabsContent value="ai-tutor">
+                        <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
+                            <Label className="text-xl font-bold mb-4 block dark:text-white text-white">Your Past Documents</Label>
+                            {previousResumes.length > 0 && (
+                                <div className="mb-4">
+                                    <Label htmlFor="previous-resumes" className="text-lg font-semibold mb-2 block dark:text-white text-white">Select Previous Initial Resume</Label>
+                                    <select
+                                        id="previous-resumes"
+                                        value={resumeKey || ""}
+                                        onChange={(e) => {
+                                            const selectedKey = e.target.value;
+                                            setResumeKey(selectedKey);
+                                            const selectedResume = previousResumes.find(resume => resume.key === selectedKey);
+                                            if (selectedResume) {
+                                                fetch(`/api/get-signed-url?key=${selectedKey}`)
+                                                    .then(res => res.json())
+                                                    .then(data => {
+                                                        const existingApp = applications.find(app => app.resumeKey === selectedKey);
+                                                        if (!existingApp) {
+                                                            setApplications(prev => [...prev, {
+                                                                id: "",
+                                                                resumeKey: selectedKey,
+                                                                tailoredResumeKey: "",
+                                                                coverLetterKey: "",
+                                                                jobDescription: "",
+                                                                tailoredResumeContent: "",
+                                                                coverLetterContent: "",
+                                                                originalResumeUrl: data.url,
+                                                            }]);
+                                                        }
+                                                        setSelectedApplication(selectedKey);
+                                                    });
+                                            }
+                                        }}
+                                        className="w-full p-2 bg-slate-900 text-white border-2 dark:border-yellow-500 rounded-md"
+                                    >
+                                        <option value="">Select a resume</option>
+                                        {previousResumes.map(resume => (
+                                            <option key={resume.key} value={resume.key}>
+                                                {resume.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+                            {pastApplications.length > 0 && (
+                                <div className="bg-black rounded-lg shadow-sm py-2 px-2 shadow-white">
+                                    <Label className="text-lg font-semibold mb-2 block dark:text-white text-white">Past Tailored Applications</Label>
+                                    <ul className="list-disc pl-5 text-white">
+                                        {pastApplications.map(app => (
+                                            <li key={`${app.id}-${app.resumeKey}-${app.companyName}-${app.position}`}>
+                                                {app.companyName} - {app.position}
+                                                <Button
+                                                    variant="outline"
+                                                    className="ml-20 text-yellow-500 mt-2 mb-1 dark:border-white justify-end"
+                                                    onClick={() => {
+                                                        setSelectedApplication(app.id);
+                                                        setTimeout(() => {
+                                                            if (resultsRef.current) {
+                                                                resultsRef.current.scrollIntoView({ behavior: "smooth" });
+                                                            }
+                                                        }, 300);
+                                                    }}
+                                                >
+                                                    View
+                                                </Button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Resume Upload */}
+                        <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
+                            <Label htmlFor="resume-upload" className="text-xl font-bold mb-4 block dark:text-white text-white">Upload New Resume</Label>
+                            <Input id="resume-upload" type="file" accept=".pdf,.doc,.docx" onChange={handleFileUpload} className="dark:border-purple-500" />
+                            <p className="text-sm text-muted-foreground text-center mt-2"><span className="font-bold">Note:</span> Supported formats: PDF, DOC, DOCX.</p>
+                        </div>
+                        {/* Job Description */}
+                        <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
+                            <Label htmlFor="job-desc" className="text-xl font-bold mb-4 block dark:text-white text-white">Job Description</Label>
+                            <Textarea id="job-desc" placeholder="Paste job description here." value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} className="dark:border-purple-500" />
+                        </div>
+                        {/* Company Name */}
+                        <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
+                            <Label htmlFor="company-name" className="text-xl font-bold mb-4 block dark:text-white text-white">Company Name</Label>
+                            <Input id="company-name" placeholder="Enter company name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="dark:border-purple-500" />
+                        </div>
+                        {/* Position */}
+                        <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
+                            <Label htmlFor="position" className="text-xl font-bold mb-4 block dark:text-white text-white">Position</Label>
+                            <Input id="position" placeholder="Enter position" value={position} onChange={(e) => setPosition(e.target.value)} className="dark:border-purple-500" />
+                        </div>
+                        {/* Prompt */}
+                        <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
+                            <Label htmlFor="prompt" className="text-xl font-bold mb-4 block dark:text-white text-white">Prompt</Label>
+                            <Input id="prompt" placeholder="E.g., Tailor my resume based on the job description." value={prompt} onChange={(e) => setPrompt(e.target.value)} className="dark:border-purple-500" />
+                        </div>
+                        {/* Button */}
+                        <Button
+                            className="mt-4 text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
+                            onClick={handleReceiveSuggestions}
+                            disabled={isProcessing}
+                        >
+                            {isProcessing ? "Processing..." : "Receive Suggestions"}
+                        </Button>
+                        {/* Application Selection */}
+                        {applications.length > 0 && (
+                            <div className="mt-10">
+                                <Label className="text-2xl font-bold mb-4 block dark:text-white text-white">Select Application</Label>
+                                <select
+                                    value={selectedApplication || ""}
+                                    onChange={(e) => setSelectedApplication(e.target.value)}
+                                    className="w-full p-2 bg-slate-900 text-white border-2 dark:border-yellow-500 rounded-md"
+                                >
+                                    <option value="">Select an application</option>
+                                    {applications.map(app => (
+                                        <option key={app.id} value={app.id}>
+                                            {app.companyName && app.position ? `${app.companyName} - ${app.position}` : `Resume: ${app.resumeKey.split('/').pop()}`}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                        {/* Results */}
+                        {currentApp && (
+                            <div
+                                ref={resultsRef}
+                                className="relative z-10 w-full h-auto mt-10 bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4 overflow-y-auto"
+                            >
+                                <Label className="text-xl font-bold mb-4 block dark:text-white text-white">Results</Label>
+                                <div className="flex justify-end space-x-4 mb-4">
+                                    <Dialog open={isModalOpen && downloadType === 'resume'} onOpenChange={setIsModalOpen}>
+                                        <DialogTrigger asChild>
+                                            <Button
+                                                onClick={() => setDownloadType('resume')}
+                                                disabled={!currentApp.tailoredResumeKey}
+                                                className="text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
+                                            >
+                                                Download Tailored Resume
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DialogContent>
+                                            <DialogHeader>
+                                                <DialogTitle>Choose Download Format for Resume</DialogTitle>
+                                            </DialogHeader>
+                                            <div className="flex justify-around mt-4">
+                                                <Button onClick={() => handleDownload('pdf')}>PDF</Button>
+                                                <Button onClick={() => handleDownload('docx')}>DOCX</Button>
+                                            </div>
+                                        </DialogContent>
+                                    </Dialog>
+
+                                    <Dialog open={isModalOpen && downloadType === 'cover-letter'} onOpenChange={setIsModalOpen}>
+                                        <DialogTrigger asChild>
+                                            <Button
+                                                onClick={() => setDownloadType('cover-letter')}
+                                                disabled={!currentApp.coverLetterKey}
+                                                className="text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
+                                            >
+                                                Download Cover Letter
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DialogContent>
+                                            <DialogHeader>
+                                                <DialogTitle>Choose Download Format for Cover Letter</DialogTitle>
+                                            </DialogHeader>
+                                            <div className="flex justify-around mt-4">
+                                                <Button onClick={() => handleDownload('pdf')}>PDF</Button>
+                                                <Button onClick={() => handleDownload('docx')}>DOCX</Button>
+                                            </div>
+                                        </DialogContent>
+                                    </Dialog>
+                                </div>
+                                <Tabs defaultValue="original" className="w-full h-full">
+                                    <TabsList className="grid w-full grid-cols-3">
+                                        <TabsTrigger value="original">Original Resume</TabsTrigger>
+                                        <TabsTrigger value="resume" disabled={!currentApp.tailoredResumeKey}>Tailored Resume</TabsTrigger>
+                                        <TabsTrigger value="cover-letter" disabled={!currentApp.coverLetterKey}>Cover Letter</TabsTrigger>
+                                    </TabsList>
+                                    <div className="h-auto">
+                                        <TabsContent value="original" className="max-h-screen overflow-y-auto">
+                                            {currentApp.originalResumeUrl ? (
+                                                <>
+                                                    <iframe
+                                                        src={currentApp.originalResumeUrl}
+                                                        className="w-full h-auto max-h-[50vh] mt-4 border-2 dark:border-purple-500 border-yellow-500 rounded-lg mr-4"
+                                                        style={{ maxWidth: '100%', overflow: 'auto' }}
+                                                    />
+                                                    <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+                                                        <DialogTrigger asChild>
+                                                            <Button
+                                                                onClick={() => setIsModalOpen(true)}
+                                                                className="mt-2 text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
+                                                            >
+                                                                Expand Original Resume
+                                                            </Button>
+                                                        </DialogTrigger>
+                                                        <DialogContent className="max-w-6xl h-4/5 p-2 flex flex-col">
+                                                            <DialogHeader className="p-2">
+                                                                <DialogTitle>Original Resume</DialogTitle>
+                                                            </DialogHeader>
+                                                            <div className="flex-grow">
+                                                                <iframe
+                                                                    src={currentApp.originalResumeUrl}
+                                                                    style={{ width: '100%', height: '100%', border: 'none' }}
+                                                                />
+                                                            </div>
+                                                        </DialogContent>
+                                                    </Dialog>
+                                                </>
+                                            ) : (
+                                                <p className="text-white">Original resume not available.</p>
+                                            )}
+                                        </TabsContent>
+                                        <TabsContent value="resume" className="h-auto overflow-y-auto">
+                                            <TipTapEditor
+                                                value={currentApp.tailoredResumeContent}
+                                                onChange={(content) => {
+                                                    setApplications((prev) =>
+                                                        prev.map((app) =>
+                                                            app.resumeKey === currentApp.resumeKey ? { ...app, tailoredResumeContent: content } : app
+                                                        )
+                                                    );
+                                                    saveContentDebounced(currentApp.tailoredResumeKey, content);
+                                                }}
+                                                style={{ width: '100%', maxWidth: '100%', height: 'auto', overflowY: 'auto' }}
+                                            />
+                                        </TabsContent>
+                                        <TabsContent value="cover-letter" className="h-auto overflow-y-auto">
+                                            <TipTapEditor
+                                                value={currentApp.coverLetterContent}
+                                                onChange={(content) => {
+                                                    setApplications((prev) =>
+                                                        prev.map((app) =>
+                                                            app.resumeKey === currentApp.resumeKey ? { ...app, coverLetterContent: content } : app
+                                                        )
+                                                    );
+                                                    saveContentDebounced(currentApp.coverLetterKey, content);
+                                                }}
+                                                style={{ width: '100%', maxWidth: '100%', height: 'auto', overflowY: 'auto' }}
+                                            />
+                                        </TabsContent>
+                                    </div>
+                                </Tabs>
+                            </div>
+                        )}
+                    </TabsContent>
+
+                    {/* Credibility Tab */}
+                    <TabsContent value="credibility">
+                        <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
+                            <h2 className="text-2xl font-bold text-white">Credibility Analysis</h2>
+                            <Label className="text-lg font-semibold text-white mt-4 block">Select Application</Label>
                             <select
-                                id="previous-resumes"
-                                value={resumeKey || ""}
-                                onChange={(e) => {
-                                    const selectedKey = e.target.value;
-                                    setResumeKey(selectedKey);
-                                    const selectedResume = previousResumes.find(resume => resume.key === selectedKey);
-                                    if (selectedResume) {
-                                        fetch(`/api/get-signed-url?key=${selectedKey}`)
-                                            .then(res => res.json())
-                                            .then(data => {
-                                                const existingApp = applications.find(app => app.resumeKey === selectedKey);
-                                                if (!existingApp) {
-                                                    setApplications(prev => [...prev, {
-                                                        id: "",
-                                                        resumeKey: selectedKey,
-                                                        tailoredResumeKey: "",
-                                                        coverLetterKey: "",
-                                                        jobDescription: "",
-                                                        tailoredResumeContent: "",
-                                                        coverLetterContent: "",
-                                                        originalResumeUrl: data.url,
-                                                    }]);
-                                                }
-                                                setSelectedApplication(selectedKey);
-                                            });
-                                    }
-                                }}
+                                value={credibilitySelectedAppId || ""}
+                                onChange={(e) => setCredibilitySelectedAppId(e.target.value)}
                                 className="w-full p-2 bg-slate-900 text-white border-2 dark:border-yellow-500 rounded-md"
                             >
-                                <option value="">Select a resume</option>
-                                {previousResumes.map(resume => (
-                                    <option key={resume.key} value={resume.key}>
-                                        {resume.name}
+                                <option value="">Select an application</option>
+                                {pastApplications.map(app => (
+                                    <option key={app.id} value={app.id}>
+                                        {app.companyName} - {app.position}
                                     </option>
                                 ))}
                             </select>
-                        </div>
-                    )}
-                    {pastApplications.length > 0 && (
-                        <div className="bg-black rounded-lg shadow-sm py-2 px-2 shadow-white">
-                            <Label className="text-lg font-semibold mb-2 block dark:text-white text-white">Past Tailored Applications</Label>
-                            <ul className="list-disc pl-5 text-white">
-                                {pastApplications.map(app => (
-                                    <li key={`${app.id}-${app.resumeKey}-${app.companyName}-${app.position}`}>
-                                        {app.companyName} - {app.position}
+
+                            {credibilitySelectedApp && (
+                                <div className="mt-4">
+                                    {/* Initial Analysis Section */}
+                                    {credibilitySelectedApp.credibilityScore !== undefined && credibilitySelectedApp.missingKeywords ? (
+                                        <div>
+                                            <h3 className="text-xl font-bold text-white">Original Analysis</h3>
+                                            <div className="flex items-center justify-center h-96">
+                                                <Pie
+                                                    data={{
+                                                        labels: ['Score', 'Remaining'],
+                                                        datasets: [{
+                                                            data: [credibilitySelectedApp.credibilityScore, 100 - credibilitySelectedApp.credibilityScore],
+                                                            backgroundColor: ['#4caf50', '#e0e0e0'],
+                                                        }],
+                                                    }}
+                                                    options={{
+                                                        plugins: {
+                                                            legend: { display: false },
+                                                            tooltip: { enabled: true },
+                                                        },
+                                                    }}
+                                                    width={50}
+                                                    height={50}
+                                                    className="border-black border-2 bg-slate-950 rounded-3xl p-4 shadow-md shadow-black"
+                                                />
+                                                <p className="ml-4 text-2xl font-bold bg-black rounded-2xl p-4 text-white">{credibilitySelectedApp.credibilityScore}%</p>
+                                            </div>
+                                            <h4 className="text-lg font-semibold text-white mt-2">Missing Keywords:</h4>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mt-2">
+                                                {credibilitySelectedApp.missingKeywords.map((keyword, index) => (
+                                                    <div
+                                                        key={index}
+                                                        className="bg-black shadow-black font-bold text-white rounded-lg p-3 shadow-md border border-gray-600 hover:bg-gray-700 transition-colors duration-200 text-center"
+                                                    >
+                                                        <Atom />
+                                                        <span className="text-sm font-semibold">{index + 1}. </span>
+                                                        {keyword}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <h3 className="text-xl font-bold text-white">Initial Analysis</h3>
+                                            <Textarea
+                                                value={credibilitySelectedApp.jobDescription}
+                                                onChange={(e) => {
+                                                    setApplications((prev) =>
+                                                        prev.map((app) =>
+                                                            app.id === credibilitySelectedApp.id ? { ...app, jobDescription: e.target.value } : app
+                                                        )
+                                                    );
+                                                }}
+                                                placeholder="Paste job description here for initial analysis"
+                                                className="dark:border-purple-500 mt-2"
+                                            />
+                                            <Button
+                                                onClick={handleAnalyzeCredibility}
+                                                disabled={isInitialAnalysisProcessing || !credibilitySelectedApp.jobDescription}
+                                                className="mt-2 text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
+                                            >
+                                                {isInitialAnalysisProcessing ? "Analyzing..." : "Analyze Credibility"}
+                                            </Button>
+                                        </div>
+                                    )}
+
+                                    {/* Re-analysis Section */}
+                                    <div className="mt-4">
+                                        <h3 className="text-xl font-bold text-white">Re-analyze with Job Description</h3>
+                                        <Textarea
+                                            value={newJobDescription}
+                                            onChange={(e) => setNewJobDescription(e.target.value)}
+                                            placeholder="Paste new job description here or leave empty to use cached one"
+                                            className="dark:border-purple-500 mt-2"
+                                        />
                                         <Button
-                                            variant="outline"
-                                            className="ml-20 text-yellow-500 mt-2 mb-1 dark:border-white justify-end"
-                                            onClick={() => {
-                                                setSelectedApplication(app.id);
-                                                setTimeout(() => {
-                                                    if (resultsRef.current) {
-                                                        resultsRef.current.scrollIntoView({ behavior: "smooth" });
+                                            onClick={async () => {
+                                                let jobDesc = newJobDescription;
+                                                if (!jobDesc) {
+                                                    // Fetch cached job description
+                                                    jobDesc = await redis.get(`jobDescription:${credibilitySelectedApp.id}`);
+                                                    if (!jobDesc) {
+                                                        toast.error("No cached job description found. Please provide a new one.");
+                                                        return;
                                                     }
-                                                }, 300);
+                                                }
+                                                // Call handleReAnalyze with the job description (new or cached)
+                                                await handleReAnalyze(jobDesc);
                                             }}
+                                            disabled={isReAnalysisProcessing}
+                                            className="mt-2 text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
                                         >
-                                            View
+                                            {isReAnalysisProcessing ? "Re-analyzing..." : "Re-analyze"}
                                         </Button>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
-                </div>
+                                    </div>
 
-                {/* Resume Upload */}
-                <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
-                    <Label htmlFor="resume-upload" className="text-xl font-bold mb-4 block dark:text-white text-white">Upload New Resume</Label>
-                    <Input id="resume-upload" type="file" accept=".pdf,.doc,.docx" onChange={handleFileUpload} className="dark:border-purple-500" />
-                    <p className="text-sm text-muted-foreground text-center mt-2"><span className="font-bold">Note:</span> Supported formats: PDF, DOC, DOCX.</p>
-                </div>
-                {/* Job Description */}
-                <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
-                    <Label htmlFor="job-desc" className="text-xl font-bold mb-4 block dark:text-white text-white">Job Description</Label>
-                    <Textarea id="job-desc" placeholder="Paste job description here." value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} className="dark:border-purple-500" />
-                </div>
-                {/* Company Name */}
-                <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
-                    <Label htmlFor="company-name" className="text-xl font-bold mb-4 block dark:text-white text-white">Company Name</Label>
-                    <Input id="company-name" placeholder="Enter company name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="dark:border-purple-500" />
-                </div>
-                {/* Position */}
-                <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
-                    <Label htmlFor="position" className="text-xl font-bold mb-4 block dark:text-white text-white">Position</Label>
-                    <Input id="position" placeholder="Enter position" value={position} onChange={(e) => setPosition(e.target.value)} className="dark:border-purple-500" />
-                </div>
-                {/* Prompt */}
-                <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
-                    <Label htmlFor="prompt" className="text-xl font-bold mb-4 block dark:text-white text-white">Prompt</Label>
-                    <Input id="prompt" placeholder="E.g., Tailor my resume based on the job description." value={prompt} onChange={(e) => setPrompt(e.target.value)} className="dark:border-purple-500" />
-                </div>
-                {/* Button */}
-                <Button
-                    className="mt-4 text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
-                    onClick={handleReceiveSuggestions}
-                    disabled={isProcessing}
-                >
-                    {isProcessing ? "Processing..." : "Receive Suggestions"}
-                </Button>
-                {/* Application Selection */}
-                {applications.length > 0 && (
-                    <div className="mt-10">
-                        <Label className="text-2xl font-bold mb-4 block dark:text-white text-white">Select Application</Label>
-                        <select
-                            value={selectedApplication || ""}
-                            onChange={(e) => setSelectedApplication(e.target.value)}
-                            className="w-full p-2 bg-slate-900 text-white border-2 dark:border-yellow-500 rounded-md"
-                        >
-                            <option value="">Select an application</option>
-                            {applications.map(app => (
-                                <option key={app.id} value={app.id}>
-                                    {app.companyName && app.position ? `${app.companyName} - ${app.position}` : `Resume: ${app.resumeKey.split('/').pop()}`}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                )}
+                                    {/* Re-analysis Result */}
+                                    {reAnalysisResult && (
+                                        <div className="mt-4">
+                                            <h3 className="text-xl font-bold text-white">Re-analysis Result</h3>
+                                            <div className="flex items-center justify-center h-96">
+                                                <Pie
+                                                    data={{
+                                                        labels: ['Score', 'Remaining'],
+                                                        datasets: [{
+                                                            data: [reAnalysisResult.score, 100 - reAnalysisResult.score],
+                                                            backgroundColor: ['#4caf50', '#e0e0e0'],
+                                                        }],
+                                                    }}
+                                                    options={{
+                                                        plugins: {
+                                                            legend: { display: false },
+                                                            tooltip: { enabled: true },
+                                                        },
+                                                    }}
+                                                    width={200}
+                                                    height={200}
+                                                    className="border-black border-2 bg-slate-950 rounded-3xl p-4 shadow-md shadow-black"
+                                                />
+                                                <p className="ml-4 text-2xl text-white p-4 bg-black rounded-2xl font-bold">{reAnalysisResult.score}%</p>
+                                            </div>
+                                            <h4 className="text-lg font-semibold text-white mt-2">Missing Keywords:</h4>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mt-2">
+                                                {reAnalysisResult.missingKeywords.map((keyword, index) => (
+                                                    <div
+                                                        key={index}
+                                                        className="bg-black shadow-black font-bold text-white rounded-lg p-3 shadow-md border border-gray-600 hover:bg-gray-700 transition-colors duration-200 text-center"
+                                                    >
+                                                        <Atom />
+                                                        <span className="text-sm font-semibold">{index + 1}. </span>
+                                                        {keyword}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Display Resumes */}
+                                    <div className="grid grid-cols-2 gap-4 mt-4">
+                                        <div>
+                                            <h3 className="text-lg font-semibold text-white">Original Resume</h3>
+                                            {credibilitySelectedApp.originalResumeUrl ? (
+                                                <iframe
+                                                    src={credibilitySelectedApp.originalResumeUrl}
+                                                    className="w-full h-96 border-2 dark:border-purple-500 border-yellow-500 rounded-lg"
+                                                />
+                                            ) : (
+                                                <p className="text-white">Original resume not available.</p>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <h3 className="text-lg font-semibold text-white">Tailored Resume</h3>
+                                            <TipTapEditor
+                                                value={credibilitySelectedApp.tailoredResumeContent}
+                                                editable={false}
+                                                onChange={() => { }}
+                                                style={{ width: '100%', height: '400px', overflowY: 'auto' }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </TabsContent>
+                </Tabs>
             </div>
-            {/* Results */}
-            {currentApp && (
-                <div ref={resultsRef} className="relative z-10 w-full h-screen md:w-4/5 mt-10 bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
-                    <Label className="text-xl font-bold mb-4 block dark:text-white text-white">Results</Label>
-                    <div className="flex justify-end space-x-4 mb-4">
-                        <Dialog open={isModalOpen && downloadType === 'resume'} onOpenChange={setIsModalOpen}>
-                            <DialogTrigger asChild>
-                                <Button
-                                    onClick={() => setDownloadType('resume')}
-                                    disabled={!currentApp.tailoredResumeKey}
-                                    className="text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
-                                >
-                                    Download Tailored Resume
-                                </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                                <DialogHeader>
-                                    <DialogTitle>Choose Download Format for Resume</DialogTitle>
-                                </DialogHeader>
-                                <div className="flex justify-around mt-4">
-                                    <Button onClick={() => handleDownload('pdf')}>PDF</Button>
-                                    <Button onClick={() => handleDownload('docx')}>DOCX</Button>
-                                </div>
-                            </DialogContent>
-                        </Dialog>
-
-                        <Dialog open={isModalOpen && downloadType === 'cover-letter'} onOpenChange={setIsModalOpen}>
-                            <DialogTrigger asChild>
-                                <Button
-                                    onClick={() => setDownloadType('cover-letter')}
-                                    disabled={!currentApp.coverLetterKey}
-                                    className="text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
-                                >
-                                    Download Cover Letter
-                                </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                                <DialogHeader>
-                                    <DialogTitle>Choose Download Format for Cover Letter</DialogTitle>
-                                </DialogHeader>
-                                <div className="flex justify-around mt-4">
-                                    <Button onClick={() => handleDownload('pdf')}>PDF</Button>
-                                    <Button onClick={() => handleDownload('docx')}>DOCX</Button>
-                                </div>
-                            </DialogContent>
-                        </Dialog>
-                    </div>
-                    <Tabs defaultValue="original" className="w-full h-full">
-                        <TabsList className="grid w-full grid-cols-3">
-                            <TabsTrigger value="original">Original Resume</TabsTrigger>
-                            <TabsTrigger value="resume" disabled={!currentApp.tailoredResumeKey}>Tailored Resume</TabsTrigger>
-                            <TabsTrigger value="cover-letter" disabled={!currentApp.coverLetterKey}>Cover Letter</TabsTrigger>
-                        </TabsList>
-                        <div className="h-[calc(100%-4rem)] overflow-y-auto">
-                            <TabsContent value="original" className="h-full">
-                                {currentApp.originalResumeUrl ? (
-                                    <iframe src={currentApp.originalResumeUrl} className="w-full h-full mt-4 border-2 dark:border-purple-500 border-yellow-500 rounded-lg mr-4" />
-                                ) : (
-                                    <p className="text-white">Original resume not available.</p>
-                                )}
-                            </TabsContent>
-                            <TabsContent value="resume" className="h-full">
-                                <TipTapEditor
-                                    value={currentApp.tailoredResumeContent}
-                                    onChange={(content) => {
-                                        setApplications(prev =>
-                                            prev.map(app =>
-                                                app.resumeKey === currentApp.resumeKey ? { ...app, tailoredResumeContent: content } : app
-                                            )
-                                        );
-                                        saveContentDebounced(currentApp.tailoredResumeKey, content);
-                                    }}
-                                />
-                            </TabsContent>
-                            <TabsContent value="cover-letter" className="h-full">
-                                <TipTapEditor
-                                    value={currentApp.coverLetterContent}
-                                    onChange={(content) => {
-                                        setApplications(prev =>
-                                            prev.map(app =>
-                                                app.resumeKey === currentApp.resumeKey ? { ...app, coverLetterContent: content } : app
-                                            )
-                                        );
-                                        saveContentDebounced(currentApp.coverLetterKey, content);
-                                    }}
-                                />
-                            </TabsContent>
-                        </div>
-                    </Tabs>
-                </div>
-            )}
         </div>
     );
 };
