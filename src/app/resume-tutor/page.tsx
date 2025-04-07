@@ -12,9 +12,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
-import { redis } from '../lib/redis';
-import { Atom } from "lucide-react";
-
+import { ScrollText } from "lucide-react";
+import { BriefcaseBusiness } from "lucide-react";
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -292,33 +291,37 @@ const ResumeTutor = () => {
                 body: JSON.stringify({
                     resumeContent: credibilitySelectedApp.tailoredResumeContent,
                     jobDescription: credibilitySelectedApp.jobDescription,
+                    applicationId: credibilitySelectedApp.id,
                 }),
             });
 
             if (!response.ok) {
+                const text = await response.text();
+                console.error("Response not OK:", response.status, text);
                 throw new Error("Failed to analyze credibility");
             }
 
-            const { score, missingKeywords } = await response.json();
+            const data = await response.json();
+            console.log("Received data:", data);
             setApplications((prev) =>
                 prev.map((app) =>
-                    app.id === credibilitySelectedApp.id ? { ...app, credibilityScore: score, missingKeywords } : app
+                    app.id === credibilitySelectedApp.id ? { ...app, credibilityScore: data.score, missingKeywords: data.missingKeywords } : app
                 )
             );
-
-            // Cache the job description for 24 hours (86400 seconds)
-            await redis.set(`jobDescription:${credibilitySelectedApp.id}`, credibilitySelectedApp.jobDescription, { ex: 86400 });
-
             toast.success("Credibility analysis completed");
         } catch (error) {
             console.error("Error analyzing credibility:", error);
-            toast.error("Failed to analyze credibility");
+            if (error instanceof Error) {
+                toast.error(error.message || "Failed to analyze credibility");
+            } else {
+                toast.error("Failed to analyze credibility");
+            }
         } finally {
             setIsInitialAnalysisProcessing(false);
         }
     };
 
-    const handleReAnalyze = async (jobDescription: string) => {
+    const handleReAnalyze = async () => {
         if (!credibilitySelectedApp || !credibilitySelectedApp.tailoredResumeKey) {
             toast.error("Missing tailored resume");
             return;
@@ -326,17 +329,19 @@ const ResumeTutor = () => {
 
         setIsReAnalysisProcessing(true);
         try {
-            const response = await fetch("/api/credibility-analysis", {
+            const response = await fetch("/api/re-analyze-credibility", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     resumeContent: credibilitySelectedApp.tailoredResumeContent,
-                    jobDescription: jobDescription,
+                    applicationId: credibilitySelectedApp.id,
+                    newJobDescription: newJobDescription,
                 }),
             });
 
             if (!response.ok) {
-                throw new Error("Failed to analyze credibility");
+                const errorData = await response.json();
+                throw new Error(errorData.error || "Failed to re-analyze credibility");
             }
 
             const { score, missingKeywords } = await response.json();
@@ -344,7 +349,11 @@ const ResumeTutor = () => {
             toast.success("Re-analysis completed");
         } catch (error) {
             console.error("Error re-analyzing credibility:", error);
-            toast.error("Failed to re-analyze credibility");
+            if (error instanceof Error) {
+                toast.error(error.message || "Failed to re-analyze credibility");
+            } else {
+                toast.error("Failed to re-analyze credibility");
+            }
         } finally {
             setIsReAnalysisProcessing(false);
         }
@@ -418,15 +427,23 @@ const ResumeTutor = () => {
                                 </div>
                             )}
                             {pastApplications.length > 0 && (
-                                <div className="bg-black rounded-lg shadow-sm py-2 px-2 shadow-white">
-                                    <Label className="text-lg font-semibold mb-2 block dark:text-white text-white">Past Tailored Applications</Label>
-                                    <ul className="list-disc pl-5 text-white">
-                                        {pastApplications.map(app => (
-                                            <li key={`${app.id}-${app.resumeKey}-${app.companyName}-${app.position}`}>
-                                                {app.companyName} - {app.position}
+                                <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg p-6 shadow-lg shadow-black/50 border border-gray-700">
+                                    <Label className="text-lg font-semibold mb-4 block text-white">Past Tailored Applications</Label>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                        {pastApplications.map((app) => (
+                                            <div
+                                                key={`${app.id}-${app.resumeKey}-${app.companyName}-${app.position}`}
+                                                className="bg-gray-800 rounded-xl p-4 shadow-md border border-gray-600 hover:bg-slate-900 transition-all duration-200 flex flex-col justify-between h-48"
+                                            >
+                                                <BriefcaseBusiness className="text-orange-500" />
+                                                <div className="flex-grow flex items-center justify-center">
+                                                    <h3 className="text-white font-semibold text-center text-lg">
+                                                        {app.companyName} - {app.position}
+                                                    </h3>
+                                                </div>
                                                 <Button
                                                     variant="outline"
-                                                    className="ml-20 text-yellow-500 mt-2 mb-1 dark:border-white justify-end"
+                                                    className="w-full text-yellow-500 border-yellow-500 hover:bg-yellow-500 hover:text-gray-900 transition-colors duration-200"
                                                     onClick={() => {
                                                         setSelectedApplication(app.id);
                                                         setTimeout(() => {
@@ -438,9 +455,9 @@ const ResumeTutor = () => {
                                                 >
                                                     View
                                                 </Button>
-                                            </li>
+                                            </div>
                                         ))}
-                                    </ul>
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -644,39 +661,57 @@ const ResumeTutor = () => {
                                 <div className="mt-4">
                                     {/* Initial Analysis Section */}
                                     {credibilitySelectedApp.credibilityScore !== undefined && credibilitySelectedApp.missingKeywords ? (
-                                        <div>
-                                            <h3 className="text-xl font-bold text-white">Original Analysis</h3>
-                                            <div className="flex items-center justify-center h-96">
-                                                <Pie
-                                                    data={{
-                                                        labels: ['Score', 'Remaining'],
-                                                        datasets: [{
-                                                            data: [credibilitySelectedApp.credibilityScore, 100 - credibilitySelectedApp.credibilityScore],
-                                                            backgroundColor: ['#4caf50', '#e0e0e0'],
-                                                        }],
-                                                    }}
-                                                    options={{
-                                                        plugins: {
-                                                            legend: { display: false },
-                                                            tooltip: { enabled: true },
-                                                        },
-                                                    }}
-                                                    width={50}
-                                                    height={50}
-                                                    className="border-black border-2 bg-slate-950 rounded-3xl p-4 shadow-md shadow-black"
-                                                />
-                                                <p className="ml-4 text-2xl font-bold bg-black rounded-2xl p-4 text-white">{credibilitySelectedApp.credibilityScore}%</p>
+                                        <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg p-6 shadow-lg shadow-black/50 border border-gray-700">
+                                            <h3 className="text-xl font-bold text-white mb-4">Original Analysis</h3>
+                                            <div className="flex items-center justify-center h-72">
+                                                <div className="relative w-48 h-48">
+                                                    <Pie
+                                                        data={{
+                                                            labels: ['Score', 'Missing'],
+                                                            datasets: [{
+                                                                data: [credibilitySelectedApp.credibilityScore, 100 - credibilitySelectedApp.credibilityScore],
+                                                                backgroundColor: ['#22c55e', '#4b5563'], // Vibrant green and muted gray
+                                                                borderColor: ['#fc03d3', '#d121b4'], // Dark blue border for contrast
+                                                                borderWidth: 3,
+                                                            }],
+                                                        }}
+                                                        options={{
+                                                            plugins: {
+                                                                legend: { display: false },
+                                                                tooltip: {
+                                                                    enabled: true,
+                                                                    backgroundColor: '#1e3a8a',
+                                                                    titleColor: '#ffffff',
+                                                                    bodyColor: '#e5e7eb',
+                                                                    borderColor: '#22c55e',
+                                                                    borderWidth: 3,
+                                                                },
+                                                            },
+                                                            animation: {
+                                                                animateScale: true,
+                                                                animateRotate: true,
+                                                            },
+                                                            cutout: '60%', // Doughnut-style chart
+                                                        }}
+                                                        className="drop-shadow-lg"
+                                                    />
+                                                </div>
+                                                <div className="ml-6 flex items-center">
+                                                    <p className="text-3xl font-extrabold text-white bg-black rounded-full px-6 py-3 shadow-md">
+                                                        {credibilitySelectedApp.credibilityScore}%
+                                                    </p>
+                                                </div>
                                             </div>
-                                            <h4 className="text-lg font-semibold text-white mt-2">Missing Keywords:</h4>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mt-2">
+                                            <h4 className="text-lg font-semibold text-white mt-6 mb-2">Missing Keywords:</h4>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                                                 {credibilitySelectedApp.missingKeywords.map((keyword, index) => (
                                                     <div
                                                         key={index}
-                                                        className="bg-black shadow-black font-bold text-white rounded-lg p-3 shadow-md border border-gray-600 hover:bg-gray-700 transition-colors duration-200 text-center"
+                                                        className="bg-black text-white rounded-lg p-3 shadow-md shadow-black border border-gray-600 hover:bg-gray-700 transition-colors duration-200 text-center flex items-center justify-center space-x-2"
                                                     >
-                                                        <Atom />
-                                                        <span className="text-sm font-semibold">{index + 1}. </span>
-                                                        {keyword}
+                                                        <ScrollText className="text-red-700" />
+
+                                                        <span className="font-bold">{keyword}</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -707,28 +742,16 @@ const ResumeTutor = () => {
                                     )}
 
                                     {/* Re-analysis Section */}
-                                    <div className="mt-4">
-                                        <h3 className="text-xl font-bold text-white">Re-analyze with Job Description</h3>
+                                    <div className="mt-6 bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg p-6 shadow-lg shadow-black/50 border border-gray-700">
+                                        <h3 className="text-xl font-bold text-white mb-4">Re-analyze with Job Description</h3>
                                         <Textarea
                                             value={newJobDescription}
                                             onChange={(e) => setNewJobDescription(e.target.value)}
                                             placeholder="Paste new job description here or leave empty to use cached one"
-                                            className="dark:border-purple-500 mt-2"
+                                            className="dark:border-purple-500 mt-2 bg-gray-800 text-white placeholder-gray-400 rounded-md p-3"
                                         />
                                         <Button
-                                            onClick={async () => {
-                                                let jobDesc = newJobDescription;
-                                                if (!jobDesc) {
-                                                    // Fetch cached job description
-                                                    jobDesc = await redis.get(`jobDescription:${credibilitySelectedApp.id}`);
-                                                    if (!jobDesc) {
-                                                        toast.error("No cached job description found. Please provide a new one.");
-                                                        return;
-                                                    }
-                                                }
-                                                // Call handleReAnalyze with the job description (new or cached)
-                                                await handleReAnalyze(jobDesc);
-                                            }}
+                                            onClick={handleReAnalyze}
                                             disabled={isReAnalysisProcessing}
                                             className="mt-2 text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
                                         >
@@ -738,39 +761,56 @@ const ResumeTutor = () => {
 
                                     {/* Re-analysis Result */}
                                     {reAnalysisResult && (
-                                        <div className="mt-4">
-                                            <h3 className="text-xl font-bold text-white">Re-analysis Result</h3>
-                                            <div className="flex items-center justify-center h-96">
-                                                <Pie
-                                                    data={{
-                                                        labels: ['Score', 'Remaining'],
-                                                        datasets: [{
-                                                            data: [reAnalysisResult.score, 100 - reAnalysisResult.score],
-                                                            backgroundColor: ['#4caf50', '#e0e0e0'],
-                                                        }],
-                                                    }}
-                                                    options={{
-                                                        plugins: {
-                                                            legend: { display: false },
-                                                            tooltip: { enabled: true },
-                                                        },
-                                                    }}
-                                                    width={200}
-                                                    height={200}
-                                                    className="border-black border-2 bg-slate-950 rounded-3xl p-4 shadow-md shadow-black"
-                                                />
-                                                <p className="ml-4 text-2xl text-white p-4 bg-black rounded-2xl font-bold">{reAnalysisResult.score}%</p>
+                                        <div className="mt-6 bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg p-6 shadow-lg shadow-black/50 border border-gray-700">
+                                            <h3 className="text-xl font-bold text-white mb-4">Re-analysis Result</h3>
+                                            <div className="flex items-center justify-center h-72">
+                                                <div className="relative w-48 h-48">
+                                                    <Pie
+                                                        data={{
+                                                            labels: ['Score', 'Missing'],
+                                                            datasets: [{
+                                                                data: [reAnalysisResult.score, 100 - reAnalysisResult.score],
+                                                                backgroundColor: ['#22c55e', '#4b5563'], // Vibrant green and muted gray
+                                                                borderColor: ['#fc03d3', '#d121b4'], // Pink border to match Initial Analysis
+                                                                borderWidth: 3,
+                                                            }],
+                                                        }}
+                                                        options={{
+                                                            plugins: {
+                                                                legend: { display: false },
+                                                                tooltip: {
+                                                                    enabled: true,
+                                                                    backgroundColor: '#1e3a8a',
+                                                                    titleColor: '#ffffff',
+                                                                    bodyColor: '#e5e7eb',
+                                                                    borderColor: '#22c55e',
+                                                                    borderWidth: 3,
+                                                                },
+                                                            },
+                                                            animation: {
+                                                                animateScale: true,
+                                                                animateRotate: true,
+                                                            },
+                                                            cutout: '60%', // Doughnut-style chart
+                                                        }}
+                                                        className="drop-shadow-lg"
+                                                    />
+                                                </div>
+                                                <div className="ml-6 flex items-center">
+                                                    <p className="text-3xl font-extrabold text-white bg-black rounded-full px-6 py-3 shadow-md">
+                                                        {reAnalysisResult.score}%
+                                                    </p>
+                                                </div>
                                             </div>
-                                            <h4 className="text-lg font-semibold text-white mt-2">Missing Keywords:</h4>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mt-2">
+                                            <h4 className="text-lg font-semibold text-white mt-6 mb-2">Missing Keywords:</h4>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                                                 {reAnalysisResult.missingKeywords.map((keyword, index) => (
                                                     <div
                                                         key={index}
-                                                        className="bg-black shadow-black font-bold text-white rounded-lg p-3 shadow-md border border-gray-600 hover:bg-gray-700 transition-colors duration-200 text-center"
+                                                        className="bg-black text-white rounded-lg p-3 shadow-md shadow-black border border-gray-600 hover:bg-gray-700 transition-colors duration-200 text-center flex items-center justify-center space-x-2"
                                                     >
-                                                        <Atom />
-                                                        <span className="text-sm font-semibold">{index + 1}. </span>
-                                                        {keyword}
+                                                        <ScrollText className="text-red-700" />
+                                                        <span className="font-bold">{keyword}</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -778,8 +818,9 @@ const ResumeTutor = () => {
                                     )}
 
                                     {/* Display Resumes */}
-                                    <div className="grid grid-cols-2 gap-4 mt-4">
-                                        <div>
+                                    {/* <div className="grid grid-cols-2 gap-4 mt-4"> */}
+                                    <div >
+                                        {/* <div>
                                             <h3 className="text-lg font-semibold text-white">Original Resume</h3>
                                             {credibilitySelectedApp.originalResumeUrl ? (
                                                 <iframe
@@ -789,14 +830,14 @@ const ResumeTutor = () => {
                                             ) : (
                                                 <p className="text-white">Original resume not available.</p>
                                             )}
-                                        </div>
-                                        <div>
+                                        </div> */}
+                                        <div className="mt-6">
                                             <h3 className="text-lg font-semibold text-white">Tailored Resume</h3>
                                             <TipTapEditor
                                                 value={credibilitySelectedApp.tailoredResumeContent}
                                                 editable={false}
                                                 onChange={() => { }}
-                                                style={{ width: '100%', height: '400px', overflowY: 'auto' }}
+                                                style={{ width: '100%', height: '700px', overflowY: 'auto' }}
                                             />
                                         </div>
                                     </div>
