@@ -58,7 +58,8 @@ const ResumeTutor = () => {
     const [selectedApplication, setSelectedApplication] = useState<string | null>(null);
     const [previousResumes, setPreviousResumes] = useState<PreviousResume[]>([]);
     const [pastApplications, setPastApplications] = useState<PastApplication[]>([]);
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false); // For download modal
+    const [isExpandModalOpen, setIsExpandModalOpen] = useState(false); // For expand modal
     const [downloadType, setDownloadType] = useState<'resume' | 'cover-letter' | null>(null);
 
     // Credibility tab states
@@ -272,7 +273,7 @@ const ResumeTutor = () => {
             console.error('Error downloading document:', error);
             toast.error('Failed to download document');
         } finally {
-            setIsModalOpen(false);
+            setIsDownloadModalOpen(false); // Close the download modal
             setDownloadType(null);
         }
     };
@@ -433,7 +434,8 @@ const ResumeTutor = () => {
                                         {pastApplications.map((app) => (
                                             <div
                                                 key={`${app.id}-${app.resumeKey}-${app.companyName}-${app.position}`}
-                                                className="bg-gray-800 rounded-xl p-4 shadow-md border border-gray-600 hover:bg-slate-900 transition-all duration-200 flex flex-col justify-between h-48"
+                                                className={`bg-gray-800 rounded-xl p-4 shadow-md border border-gray-600 hover:bg-slate-900 transition-all duration-200 flex flex-col justify-between h-48 hover:cursor-pointer *
+                                                    ${selectedApplication === app.id ? "border-2 border-yellow-500" : ""} `}
                                             >
                                                 <BriefcaseBusiness className="text-orange-500" />
                                                 <div className="flex-grow flex items-center justify-center">
@@ -522,10 +524,14 @@ const ResumeTutor = () => {
                             >
                                 <Label className="text-xl font-bold mb-4 block dark:text-white text-white">Results</Label>
                                 <div className="flex justify-end space-x-4 mb-4">
-                                    <Dialog open={isModalOpen && downloadType === 'resume'} onOpenChange={setIsModalOpen}>
+                                    {/* Download Tailored Resume Modal */}
+                                    <Dialog open={isDownloadModalOpen && downloadType === 'resume'} onOpenChange={setIsDownloadModalOpen}>
                                         <DialogTrigger asChild>
                                             <Button
-                                                onClick={() => setDownloadType('resume')}
+                                                onClick={() => {
+                                                    setDownloadType('resume');
+                                                    setIsDownloadModalOpen(true);
+                                                }}
                                                 disabled={!currentApp.tailoredResumeKey}
                                                 className="text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
                                             >
@@ -543,10 +549,14 @@ const ResumeTutor = () => {
                                         </DialogContent>
                                     </Dialog>
 
-                                    <Dialog open={isModalOpen && downloadType === 'cover-letter'} onOpenChange={setIsModalOpen}>
+                                    {/* Download Cover Letter Modal */}
+                                    <Dialog open={isDownloadModalOpen && downloadType === 'cover-letter'} onOpenChange={setIsDownloadModalOpen}>
                                         <DialogTrigger asChild>
                                             <Button
-                                                onClick={() => setDownloadType('cover-letter')}
+                                                onClick={() => {
+                                                    setDownloadType('cover-letter');
+                                                    setIsDownloadModalOpen(true);
+                                                }}
                                                 disabled={!currentApp.coverLetterKey}
                                                 className="text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
                                             >
@@ -579,10 +589,10 @@ const ResumeTutor = () => {
                                                         className="w-full h-auto max-h-[50vh] mt-4 border-2 dark:border-purple-500 border-yellow-500 rounded-lg mr-4"
                                                         style={{ maxWidth: '100%', overflow: 'auto' }}
                                                     />
-                                                    <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+                                                    <Dialog open={isExpandModalOpen} onOpenChange={setIsExpandModalOpen}>
                                                         <DialogTrigger asChild>
                                                             <Button
-                                                                onClick={() => setIsModalOpen(true)}
+                                                                onClick={() => setIsExpandModalOpen(true)}
                                                                 className="mt-2 text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
                                                             >
                                                                 Expand Original Resume
