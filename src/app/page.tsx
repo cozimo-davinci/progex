@@ -1,9 +1,11 @@
+import HeroSection from "@/components/ui/hero-section"
 
 
 export default function Home() {
   return (
     <div>
-      <h1 className="text-2xl text-center justify-center">Home Page</h1>
+
+      <HeroSection />
     </div>
   );
 }

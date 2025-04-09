@@ -364,7 +364,7 @@ const ResumeTutor = () => {
 
     return (
         <div
-            className="min-h-screen flex flex-col items-center justify-center p-4 rounded-lg relative border-t-4 dark:border-t-yellow-500 border-t-black"
+            className="min-h-screen mt-20 flex flex-col items-center justify-center p-4 rounded-lg relative border-t-4 dark:border-t-yellow-500 border-t-black"
             style={{
                 backgroundImage: "url('/images/resume-background-picture.png')",
                 backgroundSize: "cover",
