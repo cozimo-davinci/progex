@@ -134,14 +134,14 @@ export default function HeroSection() {
                                 >
                                     <div key={1} className="bg-foreground/10 rounded-[calc(var(--radius-xl)+0.125rem)]  p-0.5">
                                         <Button asChild size="lg" className="rounded-xl px-5 text-base">
-                                            <Link href="#link">
-                                                <span className="text-nowrap">Start Building</span>
+                                            <Link href="/login">
+                                                <span className="text-nowrap">Get Started</span>
                                             </Link>
                                         </Button>
                                     </div>
                                     <Button key={2} asChild size="lg" variant="ghost" className="h-10.5 py-2.5 rounded-xl px-5">
-                                        <Link href="#link">
-                                            <span className="text-nowrap">Request a demo</span>
+                                        <Link href="/contact-us">
+                                            <span className="text-nowrap">Request Assistance</span>
                                         </Link>
                                     </Button>
                                 </AnimatedGroup>
@@ -169,14 +169,14 @@ export default function HeroSection() {
                                 <div className="inset-shadow-2xs ring-background dark:inset-shadow-white/20 bg-background relative mx-auto max-w-6xl overflow-hidden rounded-2xl border p-4 shadow-lg shadow-zinc-950/15 ring-1">
                                     <Image
                                         className="bg-background aspect-15/8 relative hidden rounded-2xl dark:block"
-                                        src="/mail2.png"
+                                        src="/images/dashboard-demo.png"
                                         alt="app screen"
                                         width="2700"
                                         height="1440"
                                     />
                                     <Image
                                         className="z-2 border-border/25 aspect-15/8 relative rounded-2xl border dark:hidden"
-                                        src="/mail2-light.png"
+                                        src="/images/dashboard-demo-light.png"
                                         alt="app screen"
                                         width="2700"
                                         height="1440"
