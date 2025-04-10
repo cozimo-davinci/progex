@@ -103,7 +103,7 @@ const Dashboard = () => {
     }
 
     return (
-        <div className="p-4">
+        <div className="p-4 mt-16">
             <h1 className="text-2xl font-bold mb-4 text-white">Dashboard</h1>
             <div className="flex justify-start gap-2">
                 <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>

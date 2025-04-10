@@ -13,7 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { ScrollText } from "lucide-react";
-import { BriefcaseBusiness } from "lucide-react";
+import { BriefcaseBusiness, ArrowUp } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -69,7 +70,34 @@ const ResumeTutor = () => {
     const [isInitialAnalysisProcessing, setIsInitialAnalysisProcessing] = useState(false);
     const [isReAnalysisProcessing, setIsReAnalysisProcessing] = useState(false);
 
+    //Framer motion states
+    const [showScrollTop, setShowScrollTop] = useState(false);
+
     const credibilitySelectedApp = applications.find(app => app.id === credibilitySelectedAppId);
+
+
+    //Scroll Detection Logic
+    const checkScrollTop = () => {
+        if (window.scrollY > 200) {
+            setShowScrollTop(true);
+        } else {
+            setShowScrollTop(false);
+        }
+    };
+
+    useEffect(() => {
+        window.addEventListener("scroll", checkScrollTop);
+        return () => window.removeEventListener("scroll", checkScrollTop);
+    }, []);
+
+    // Scroll to top function
+    const scrollToTop = () => {
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    }
+
 
     // Reset re-analysis state when the selected application changes
     useEffect(() => {
@@ -857,7 +885,26 @@ const ResumeTutor = () => {
                     </TabsContent>
                 </Tabs>
             </div>
+            {/* Scroll Button */}
+            <AnimatePresence>
+                {showScrollTop && (
+                    <motion.button
+                        onClick={scrollToTop}
+                        className="fixed bottom-8 right-8 p-3 bg-black font-bold text-white rounded-full shadow-lg hover:bg-orange-600 transition-colors duration-200
+                        z-10"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 20 }}
+                        transition={{ duration: 0.3 }}
+                    >
+                        <ArrowUp className="h-6 w-6" />
+                    </motion.button>
+                )
+
+                }
+            </AnimatePresence>
         </div>
+
     );
 };
 

@@ -1,24 +1,23 @@
-import { createClient } from '@supabase/supabase-js';
-import { NextRequest } from 'next/server';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import { NextRequest, NextResponse } from 'next/server';
 
-const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!);
 
 export async function getCurrentUser(req: NextRequest) {
-    const cookieHeader = req.headers.get('cookie');
-    if (!cookieHeader) return null;
+    // Access cookies from the request
 
-    const cookies = Object.fromEntries(cookieHeader.split('; ').map(c => c.split('=')));
-    const accessToken = cookies['supabase-auth-token'];
-    if (!accessToken) return null;
 
-    const supabaseWithAuth = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!, {
-        global: {
-            headers: { Authorization: `Bearer ${accessToken}` },
-        },
-    });
+    // Create a supabase client with the built-in session handling and pass the cookies we got 
+    // from the request
+    const supabase = createRouteHandlerClient({ cookies });
 
-    const { data: { user }, error } = await supabaseWithAuth.auth.getUser(accessToken);
-    if (error || !user) return null;
+    // Now we need to fetch the authenticated user
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) {
+        console.error("Authentication failed: ", error?.message);
+        return NextResponse.json({ error: "Unauthorized", details: error?.message || "No user found" }, { status: 401 });
+    }
 
-    return { user, supabase: supabaseWithAuth };
+    // Return the authenticated user and Supabase client for further use
+    return { user, supabase };
 }
