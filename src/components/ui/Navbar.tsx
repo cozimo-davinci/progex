@@ -17,7 +17,7 @@ import { ModeToggle } from "@/components/ui/dark-mode";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { createSupabaseClient } from "../../../supabaseClient";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import {
@@ -25,7 +25,7 @@ import {
     ScrollIcon,
     BookIcon,
     PenIcon,
-    DraftingCompassIcon
+    DraftingCompassIcon,
 } from "lucide-react";
 
 const components = [
@@ -51,34 +51,27 @@ export function NavigationMenuDemo() {
     const [gettingStartedOpen, setGettingStartedOpen] = React.useState(false);
     const [somethingElseOpen, setSomethingElseOpen] = React.useState(false);
     const [isLoggedIn, setIsLoggedIn] = React.useState(false);
-    const [supabase, setSupabase] = React.useState<ReturnType<typeof createSupabaseClient> | null>(null);
     const [isScrolled, setIsScrolled] = React.useState(false);
 
     const router = useRouter();
+    const supabase = createClientComponentClient();
 
-    // Initialize Supabase client and session
+    // Initialize session and auth state listener
     React.useEffect(() => {
-        try {
-            const client = createSupabaseClient();
-            setSupabase(client);
+        const checkSession = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            setIsLoggedIn(!!session);
+        };
+        checkSession();
 
-            const checkSession = async () => {
-                const { data: { session } } = await client.auth.getSession();
-                setIsLoggedIn(!!session);
-            };
-            checkSession();
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            setIsLoggedIn(!!session);
+        });
 
-            const { data: authListener } = client.auth.onAuthStateChange((event, session) => {
-                setIsLoggedIn(!!session);
-            });
-
-            return () => {
-                authListener.subscription.unsubscribe();
-            };
-        } catch (error) {
-            console.error("Failed to initialize Supabase client:", error);
-        }
-    }, []);
+        return () => {
+            subscription.unsubscribe();
+        };
+    }, [supabase]);
 
     // Detect scroll position
     React.useEffect(() => {
@@ -91,27 +84,26 @@ export function NavigationMenuDemo() {
 
     // Logout function
     const handleLogout = async () => {
-        if (!supabase) {
-            toast.error("Supabase not initialized. Please try again.");
-            return;
-        }
-
         try {
+            // Sign out on the client side to clear the session
+            await supabase.auth.signOut();
+
+            // Optional: Call the API route for server-side cleanup
             const response = await fetch("/api/auth/logout", {
                 method: "POST",
                 credentials: "include",
             });
 
-            const data = await response.json();
             if (!response.ok) {
+                const data = await response.json();
                 throw new Error(data.error || "Logout failed");
             }
 
             setIsLoggedIn(false);
             toast.success("Logout successful!", { description: "See you soon!" });
             setTimeout(() => {
-                router.push("/");
-            }, 500);
+                router.push("/login");
+            }, 150);
         } catch (error) {
             console.error("Logout error:", error);
             toast.error("Logout failed. Please try again.", {
@@ -119,10 +111,6 @@ export function NavigationMenuDemo() {
             });
         }
     };
-
-    if (!supabase) {
-        return <div>Loading...</div>;
-    }
 
     return (
         <NavigationMenu

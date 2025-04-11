@@ -5,10 +5,11 @@ import ContentSection from "@components/ui/content-section";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
 import { ArrowUp } from "lucide-react";
-import CallToAction from "@components/ui/call-to-action";
 import Pricing from "@components/ui/pricing";
-import FAQsThree from "@components/ui/faq";
+const FAQsThree = lazy(() => import("@components/ui/faq"));
 import FooterSection from "@components/ui/footer-section";
+import { lazy, Suspense } from 'react';
+
 
 export default function Home() {
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -39,9 +40,12 @@ export default function Home() {
       <HeroSection />
       <Features />
       <ContentSection />
-      <CallToAction />
       <Pricing />
-      <FAQsThree />
+
+      <Suspense fallback={<div>Loading FAQs...</div>}>
+        <FAQsThree />
+      </Suspense>
+
       <FooterSection />
       {/* Scroll Button */}
       <AnimatePresence>

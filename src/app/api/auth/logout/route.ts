@@ -1,31 +1,21 @@
 // src/app/api/auth/logout/route.ts
 import { NextResponse, NextRequest } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
 
 export async function POST(request: NextRequest) {
-    const supabase = createClient(
-        process.env.SUPABASE_URL!,
-        process.env.SUPABASE_KEY!
-    );
+    const supabase = createRouteHandlerClient({ cookies });
 
-    // Sign out the user on the Supabase side
-    const { error } = await supabase.auth.signOut();
-
-    if (error) {
-        console.error("Logout error:", error.message);
-        return NextResponse.json(
-            { error: "Failed to log out" },
-            { status: 500 }
-        );
-    }
-
-    // Clear cookies
     const response = NextResponse.json(
-        { message: "Logged out successfully" },
+        { message: "Logged put successfully!" },
         { status: 200 }
     );
-    response.cookies.delete("supabase-auth-token");
-    response.cookies.delete("supabase-refresh-token");
 
-    return response;
+    // Ensure cookies are cleared
+    const cookieName = `sb-${process.env.NEXT_PUBLIC_SUPABASE_URL?.split(".")[1]}-auth-token`;
+    response.cookies.delete(cookieName);
+
+    return supabase.auth.signOut().then(() => {
+        return response;
+    });
 }
