@@ -35,13 +35,13 @@ export function SignUpForm({ className, ...props }: React.ComponentProps<"div">)
             } else {
                 setError(null);
                 console.log("User signed up:", data.user);
-                toast.success('Account created successfully!', {
-                    description: 'Redirecting to login page...'
+                toast.success('Account created successfully! Confirmation email sent', {
+                    description: 'Please Confirm your email, while we are redirecting you to login page...'
                 });
 
                 setTimeout(() => {
                     router.push('/login');
-                }, 3000);
+                }, 3500);
             }
         } catch (err) {
             console.error("Signup error:", err);

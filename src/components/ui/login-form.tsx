@@ -9,7 +9,7 @@ import Image from "next/image";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { createSupabaseClient } from "../../../supabaseClient"; // Adjust path as needed
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"; // Import the correct client
 
 export function LoginForm({ className, ...props }: React.ComponentProps<"div">) {
     const [email, setEmail] = useState("");
@@ -17,54 +17,24 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
     const [showPassword, setShowPassword] = useState(false);
-    const [supabase, setSupabase] = useState<ReturnType<typeof createSupabaseClient> | null>(null);
-    const [isLoading, setIsLoading] = useState(true); // Add loading state
+    const [isLoading, setIsLoading] = useState(true);
 
-    // Initialize Supabase client on client side
+    // Initialize Supabase client directly
+    const supabase = createClientComponentClient();
+
     useEffect(() => {
-        let isMounted = true;
-
-        const initializeSupabase = async () => {
-            try {
-                const client = createSupabaseClient();
-                if (isMounted) {
-                    setSupabase(client);
-                    console.log("Supabase client initialized:", client); // Debug log
-                }
-            } catch (err) {
-                console.error("Failed to initialize Supabase client:", err);
-                if (isMounted) {
-                    setError("Failed to initialize authentication. Please refresh the page.");
-                }
-            } finally {
-                if (isMounted) {
-                    setIsLoading(false); // Set loading to false regardless of success or failure
-                }
-            }
-        };
-
-        initializeSupabase();
-
-        // Cleanup to prevent memory leaks
-        return () => {
-            isMounted = false;
-        };
+        setIsLoading(false); // No complex initialization needed
     }, []);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-
-        if (!supabase) {
-            toast.error("Supabase not initialized!", { description: "Please wait or refresh the page." });
-            return;
-        }
 
         try {
             const response = await fetch("/api/auth/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password }),
-                credentials: "include", // Ensure cookies are sent with the request
+                credentials: "include", // Ensure cookies are included
             });
 
             const data = await response.json();
@@ -77,16 +47,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
             } else {
                 console.log("Login response:", data);
 
-                // Manually set the session using the tokens from the server response
-                if (data.session) {
-                    await supabase.auth.setSession({
-                        access_token: data.session.access_token,
-                        refresh_token: data.session.refresh_token,
-                    });
-                    console.log("Session set manually with tokens:", data.session);
-                }
-
-                // Verify the session
+                // The login API sets the session cookies; verify the session
                 const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
                 console.log("Session data after login:", sessionData);
                 console.log("Session error after login:", sessionError);
@@ -104,11 +65,9 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                     }
                 }
 
-                // Force a page refresh to ensure the navbar updates with the new session
                 toast.success("Login successful!", { description: "Welcome back!" });
                 setTimeout(() => {
-                    // window.location.href = "/dashboard"; // Full reload to sync state
-                    router.push('/dashboard');
+                    router.push("/dashboard");
                 }, 500);
             }
         } catch (err) {
@@ -121,11 +80,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     };
 
     if (isLoading) {
-        return <div>Loading...</div>; // Show loading state while initializing
-    }
-
-    if (error && !supabase) {
-        return <div>{error}</div>; // Show error if initialization fails
+        return <div>Loading...</div>;
     }
 
     return (
@@ -235,7 +190,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                                 </Button>
                             </div>
                             <div className="text-center text-sm">
-                                Don&apos;t have an account?{" "}
+                                Don’t have an account?{" "}
                                 <a href="/signup" className="underline underline-offset-4">
                                     Sign up
                                 </a>

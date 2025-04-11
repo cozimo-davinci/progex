@@ -1,7 +1,7 @@
 'use client';
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Clock, CreditCard, Truck, Globe, Package } from 'lucide-react';
+import { Clock, GraduationCapIcon, Brain, NotebookTabsIcon, Package } from 'lucide-react';
 import Link from 'next/link';
 import React from 'react';
 
@@ -15,9 +15,9 @@ type FAQItem = {
 // Map icons to their components
 const iconMap = {
     clock: Clock,
-    'credit-card': CreditCard,
-    truck: Truck,
-    globe: Globe,
+    'credit-card': GraduationCapIcon,
+    truck: Brain,
+    globe: NotebookTabsIcon,
     package: Package,
 };
 
@@ -32,27 +32,27 @@ const FAQsThree = React.memo(function FAQsThree() {
         {
             id: 'item-2',
             icon: 'credit-card',
-            question: 'How do subscription payments work?',
-            answer: 'Subscription payments are automatically charged to your default payment method on the same day each month or year, depending on your billing cycle. You can update your payment information and view billing history in your account dashboard.',
+            question: 'What is a Resume Tutor?',
+            answer: 'It a smart AI Agent that helps you to tailor your resumes and compose the cover letters specifically for the job. Additionally, it has a Credibility Analysis feature that shows your credibility level for that selected job. Specifically, it also provides missing keywords, that can help your resume to stand out.',
         },
         {
             id: 'item-3',
             icon: 'truck',
-            question: 'Can I expedite my shipping?',
-            answer: 'Yes, we offer several expedited shipping options at checkout. Next-day and 2-day shipping are available for most U.S. addresses if orders are placed before 2:00 PM EST. International expedited shipping options vary by destination.',
+            question: 'What is an AI Interviewer?',
+            answer: 'This feature will be coming soon.',
         },
         {
             id: 'item-4',
             icon: 'globe',
-            question: 'Do you offer localized support?',
-            answer: 'We offer multilingual support in English, Spanish, French, German, and Japanese. Our support team can assist customers in these languages via email, chat, and phone during standard business hours for each respective region.',
+            question: 'What is a job application tracker?',
+            answer: 'This feature keeps track your job applications in a nicely designed table instead of using Excel Sheets. It also has AI application feature that helps you to add your applications just by pasting a link to the job site. Additionally, you can export all your records in the CSV format or Import your already existent applications in CSV format.',
         },
-        {
-            id: 'item-5',
-            icon: 'package',
-            question: 'How do I track my order?',
-            answer: "Once your order ships, you'll receive a confirmation email with a tracking number. You can use this number on our website or the carrier's website to track your package. You can also view order status and tracking information in your account dashboard under 'Order History'.",
-        },
+        // {
+        //     id: 'item-5',
+        //     icon: 'package',
+        //     question: '',
+        //     answer: "",
+        // },
     ];
 
     return (
@@ -64,7 +64,7 @@ const FAQsThree = React.memo(function FAQsThree() {
                             <h2 className="mt-4 text-3xl font-bold">Frequently Asked Questions</h2>
                             <p className="text-muted-foreground mt-4">
                                 Can&apos;t find what you&apos;re looking for? Contact our{' '}
-                                <Link href="#" className="text-primary font-medium hover:underline">
+                                <Link href="/contact-us" className="text-primary font-medium hover:underline">
                                     customer support team
                                 </Link>
                             </p>
