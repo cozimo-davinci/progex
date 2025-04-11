@@ -1,5 +1,4 @@
-"use client";
-
+"use client"
 import {
     ColumnDef,
     flexRender,
@@ -22,18 +21,20 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@components/ui/input";
-import { Download } from "lucide-react";
+import { Download, Upload } from "lucide-react";
 
 interface DataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[];
     data: TData[];
     meta?: Record<string, unknown>;
+    onImportCSV?: () => void; // Add a callback to open the import modal
 }
 
 export function DataTable<TData, TValue>({
     columns,
     data,
     meta,
+    onImportCSV,
 }: DataTableProps<TData, TValue>) {
     const [sorting, setSorting] = React.useState<SortingState>([]);
     const [rowSelection, setRowSelection] = React.useState({});
@@ -63,35 +64,35 @@ export function DataTable<TData, TValue>({
         meta,
     });
 
-    // function to export the table data to CSV
     const exportToCSV = () => {
-        //get the headers (excluding the "select" and actions columns)
-        const headers = table.getAllColumns()
+        const headers = table
+            .getAllColumns()
             .filter((column) => column.id !== "select" && column.id !== "actions")
             .map((column) => {
-                // Use the header text if available, otherwise fallback to the column ID
                 const header = column.columnDef.header;
                 return typeof header === "string" ? header : column.id;
             });
 
-        // Get the rows (filtered and sorted as shown in the table)
         const rows = table.getFilteredRowModel().rows.map((row) => {
-            return table.getAllColumns()
+            return table
+                .getAllColumns()
                 .filter((column) => column.id !== "select" && column.id !== "actions")
                 .map((column) => {
                     const cellValue = row.getValue(column.id);
-                    //Handle special cases for formatting
                     if (column.id === "applied_at" || column.id === "updated_at") {
                         return cellValue ? `"${cellValue}"` : "Not set";
                     }
                     if (column.id === "status") {
                         return cellValue === "IN_PROGRESS"
-                            ? "In progress" : cellValue === "PROCESSING"
-                                ? "Processing" : cellValue === "APPROVED"
-                                    ? "Approved" : cellValue === "REJECTED"
-                                        ? "Rejected" : "Unknown";
+                            ? "In progress"
+                            : cellValue === "PROCESSING"
+                                ? "Processing"
+                                : cellValue === "APPROVED"
+                                    ? "Approved"
+                                    : cellValue === "REJECTED"
+                                        ? "Rejected"
+                                        : "Unknown";
                     }
-                    // Wrap values in quotes if they commas or quotes to prevent CSV issues
                     const stringValue = String(cellValue ?? "");
                     return stringValue.includes(",") || stringValue.includes('"')
                         ? `"${stringValue.replace(/"/g, '""')}"`
@@ -99,29 +100,30 @@ export function DataTable<TData, TValue>({
                 });
         });
 
-        // Create the CSV content
-        const csvContent = [
-            headers.join(","), //Header Row
-            ...rows.map((row) => row.join(", ")), //Data rows
-        ].join("\n");
-
-        // Create a Blob for the CSV file
+        const csvContent = [headers.join(","), ...rows.map((row) => row.join(", "))].join("\n");
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
         const url = window.URL.createObjectURL(blob);
-
-        // Create a temporary link to download the file
         const link = document.createElement("a");
         link.setAttribute("href", url);
         link.setAttribute("download", "job_applications.csv");
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        window.URL.revokeObjectURL(url); // Clean up
-    }
+        window.URL.revokeObjectURL(url);
+    };
 
     return (
         <div>
             <div className="flex justify-end py-2">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onImportCSV}
+                    className="flex items-center gap-2 dark:border-yellow-500 border-black border-2 mr-2"
+                >
+                    <Upload className="h-4 w-4" />
+                    Import CSV
+                </Button>
                 <Button
                     variant="outline"
                     size="sm"
@@ -134,7 +136,6 @@ export function DataTable<TData, TValue>({
                 </Button>
             </div>
             <div className="rounded-md dark:border-2 dark:border-b-white dark:border-b-4 dark:border-r-4 dark:border-r-white dark:bg-black border-black border-2 border-b-4 bg-violet-400 mt-4">
-                {/* Filter Inputs */}
                 <div className="flex items-center py-4 space-x-4 ml-2">
                     <Input
                         placeholder="Filter by Job Title"
@@ -161,7 +162,7 @@ export function DataTable<TData, TValue>({
                         className="max-w-sm font-bold border-2 dark:border-yellow-500 border-black"
                     />
                     <Input
-                        type="date" // Change to date input
+                        type="date"
                         placeholder="Filter by Date"
                         value={(table.getColumn("applied_at")?.getFilterValue() as string) ?? ""}
                         onChange={(event) =>
@@ -175,18 +176,16 @@ export function DataTable<TData, TValue>({
                     <TableHeader>
                         {table.getHeaderGroups().map((headerGroup) => (
                             <TableRow key={headerGroup.id}>
-                                {headerGroup.headers.map((header) => {
-                                    return (
-                                        <TableHead key={header.id}>
-                                            {header.isPlaceholder
-                                                ? null
-                                                : flexRender(
-                                                    header.column.columnDef.header,
-                                                    header.getContext()
-                                                )}
-                                        </TableHead>
-                                    );
-                                })}
+                                {headerGroup.headers.map((header) => (
+                                    <TableHead key={header.id}>
+                                        {header.isPlaceholder
+                                            ? null
+                                            : flexRender(
+                                                header.column.columnDef.header,
+                                                header.getContext()
+                                            )}
+                                    </TableHead>
+                                ))}
                             </TableRow>
                         ))}
                     </TableHeader>
@@ -199,20 +198,14 @@ export function DataTable<TData, TValue>({
                                 >
                                     {row.getVisibleCells().map((cell) => (
                                         <TableCell key={cell.id}>
-                                            {flexRender(
-                                                cell.column.columnDef.cell,
-                                                cell.getContext()
-                                            )}
+                                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                         </TableCell>
                                     ))}
                                 </TableRow>
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell
-                                    colSpan={columns.length}
-                                    className="h-24 text-center"
-                                >
+                                <TableCell colSpan={columns.length} className="h-24 text-center">
                                     No results.
                                 </TableCell>
                             </TableRow>
