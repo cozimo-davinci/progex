@@ -10,24 +10,27 @@ export default function Pricing() {
                 <div className="mx-auto max-w-2xl space-y-6 text-center">
                     <h1 className="text-center text-4xl font-semibold lg:text-5xl">Pricing that Scales with You</h1>
                     <p>
-                        Gemini is evolving to be more than just the models. It supports an entire to the APIs and
-                        platforms helping developers and businesses innovate.
+                        Progex is offering help for the students in their endaevour of looking for a job based on their custom needs.
                     </p>
                 </div>
 
                 <div className="mt-8 grid gap-6 md:mt-20 md:grid-cols-3">
                     <Card className="flex flex-col">
                         <CardHeader>
-                            <CardTitle className="font-medium">Free</CardTitle>
-                            <span className="my-3 block text-2xl font-semibold">$0 / mo</span>
-                            <CardDescription className="text-sm">Per editor</CardDescription>
+                            <CardTitle className="font-medium">Tier 1: Small Institutions</CardTitle>
+                            <span className="my-3 block text-2xl font-semibold">$15,000 / year</span>
+                            <CardDescription className="text-sm">College or universities with fewer than 1,000 students</CardDescription>
                         </CardHeader>
 
                         <CardContent className="space-y-4">
                             <hr className="border-dashed" />
 
                             <ul className="list-outside space-y-3 text-sm">
-                                {['Basic Analytics Dashboard', '5GB Cloud Storage', 'Email and Chat Support'].map(
+                                {['Job Application Tracker (basic version)',
+                                    'Resume AI-Tutor (standard resume tailoring and cover letter generation)',
+                                    'Email and Chat Support',
+                                    'Standard Security features (single sing-on, data encryption etc.)'
+                                ].map(
                                     (item, index) => (
                                         <li key={index} className="flex items-center gap-2">
                                             <DnaIcon className="size-5" />
@@ -55,25 +58,21 @@ export default function Pricing() {
 
                         <div className="flex flex-col">
                             <CardHeader>
-                                <CardTitle className="font-medium">Pro</CardTitle>
-                                <span className="my-3 block text-2xl font-semibold">$19 / mo</span>
-                                <CardDescription className="text-sm">Per editor</CardDescription>
+                                <CardTitle className="font-medium">Tier 2: Medium Institutions</CardTitle>
+                                <span className="my-3 block text-2xl font-semibold">$30,000 / year</span>
+                                <CardDescription className="text-sm">Institutions with 1,000 to 5,000 students.</CardDescription>
                             </CardHeader>
 
                             <CardContent className="space-y-4">
                                 <hr className="border-dashed" />
                                 <ul className="list-outside space-y-3 text-sm">
                                     {[
-                                        'Everything in Free Plan',
-                                        '5GB Cloud Storage',
-                                        'Email and Chat Support',
-                                        'Access to Community Forum',
-                                        'Single User Access',
-                                        'Access to Basic Templates',
-                                        'Mobile App Access',
-                                        '1 Custom Report Per Month',
-                                        'Monthly Product Updates',
-                                        'Standard Security Features',
+                                        'Everything in Tier 1',
+                                        'Advanced Application Tracker',
+                                        'Resume AI-Tutor with Credibility Analysis and Keyword Optimization',
+                                        'Priority support (24/7 availability)',
+                                        'Custom Integrations (with student information systems)',
+                                        'Up to 2 custom analytics report per month',
                                     ].map((item, index) => (
                                         <li key={index} className="flex items-center gap-2">
                                             <DnaIcon className="size-5" />
@@ -93,16 +92,24 @@ export default function Pricing() {
 
                     <Card className="flex flex-col">
                         <CardHeader>
-                            <CardTitle className="font-medium">Startup</CardTitle>
-                            <span className="my-3 block text-2xl font-semibold">$29 / mo</span>
-                            <CardDescription className="text-sm">Per editor</CardDescription>
+                            <CardTitle className="font-medium">Tier 3: Large Institutions</CardTitle>
+                            <span className="my-3 block text-2xl font-semibold">$50,000 / year</span>
+                            <CardDescription className="text-sm">Universities with more than 5,000 students</CardDescription>
                         </CardHeader>
 
                         <CardContent className="space-y-4">
                             <hr className="border-dashed" />
 
                             <ul className="list-outside space-y-3 text-sm">
-                                {['Everything in Pro Plan', '5GB Cloud Storage', 'Email and Chat Support'].map(
+                                {[
+                                    'Everything in Tier 2',
+                                    'AI Interviewer (live interview practice with AI feedback)',
+                                    'Dedicated account manager and premium support',
+                                    'Full customization options',
+                                    'Unlimited custom reports',
+                                    'Access to all advanced AI tools'
+
+                                ].map(
                                     (item, index) => (
                                         <li key={index} className="flex items-center gap-2">
                                             <DnaIcon className="size-5" />
@@ -116,6 +123,39 @@ export default function Pricing() {
                         <CardFooter className="mt-auto">
                             <Button asChild variant="outline" className="w-full">
                                 <Link href="">Get Started</Link>
+                            </Button>
+                        </CardFooter>
+                    </Card>
+
+                    <Card className="flex flex-col">
+                        <CardHeader>
+                            <CardTitle className="font-medium">Optional Add-Ons</CardTitle>
+                            <span className="my-3 block text-2xl font-semibold">Price $: Custom</span>
+                            <CardDescription className="text-sm">Custom solutions per request</CardDescription>
+                        </CardHeader>
+
+                        <CardContent className="space-y-4">
+                            <hr className="border-dashed" />
+
+                            <ul className="list-outside space-y-3 text-sm">
+                                {[
+                                    'Custom Development',
+                                    'Training and Onboarding',
+                                    'Premium Support',
+                                ].map(
+                                    (item, index) => (
+                                        <li key={index} className="flex items-center gap-2">
+                                            <DnaIcon className="size-5" />
+                                            {item}
+                                        </li>
+                                    )
+                                )}
+                            </ul>
+                        </CardContent>
+
+                        <CardFooter className="mt-auto">
+                            <Button asChild variant="outline" className="w-full">
+                                <Link href="">Contact Sales</Link>
                             </Button>
                         </CardFooter>
                     </Card>

@@ -1,5 +1,5 @@
 "use client"
-import HeroSection from "@/components/ui/hero-section"
+const HeroSection = lazy(() => import("@components/ui/hero-section"))
 import Features from "@components/ui/features";
 import ContentSection from "@components/ui/content-section";
 import { motion, AnimatePresence } from "framer-motion";
@@ -37,7 +37,11 @@ export default function Home() {
   }
   return (
     <div>
-      <HeroSection />
+      <Suspense fallback={<div>Loading Hero Section...</div>}>
+        <HeroSection />
+      </Suspense>
+
+
       <Features />
       <ContentSection />
       <Pricing />
