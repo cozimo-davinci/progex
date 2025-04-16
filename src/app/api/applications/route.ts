@@ -1,32 +1,114 @@
 import { NextResponse, NextRequest } from "next/server";
 import { PrismaClient } from "@prisma/client";
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { createSupabaseClient } from "@/app/lib/utils/supabase/client";
 import { cookies } from "next/headers";
 
 // Initialize Prisma client
 const prisma = global.prisma || new PrismaClient();
 if (process.env.NODE_ENV === "development") global.prisma = prisma;
+
+// Connect Prisma client once during server startup
 (async () => {
     try {
         await prisma.$connect();
         console.log("Prisma client connected to database");
     } catch (error) {
         console.error("Prisma client failed to connect:", error);
+        process.exit(1); // Exit if Prisma fails to connect
     }
 })();
+
+// Utility function to authenticate the user using the session cookie
+const authenticateUser = async () => {
+    const cookieStore = await cookies(); // Await cookies()
+    const sessionCookie = cookieStore.get("sb-auth-session")?.value;
+
+    if (!sessionCookie) {
+        throw new Error("No session cookie found");
+    }
+
+    let sessionData;
+    try {
+        sessionData = JSON.parse(sessionCookie);
+    } catch (error) {
+        console.error("Failed to parse session cookie:", error);
+        throw new Error("Invalid session cookie format");
+    }
+
+    if (!sessionData.access_token) {
+        throw new Error("Access token missing in session data");
+    }
+
+    // Create Supabase client
+    const supabase = createSupabaseClient();
+
+    // Check if the session has expired
+    if (sessionData.expires_at && Date.now() >= sessionData.expires_at * 1000) {
+        console.log("Session expired, attempting to refresh...");
+
+        if (!sessionData.refresh_token) {
+            throw new Error("Refresh token missing in session data");
+        }
+
+        // Refresh the session using the refresh token
+        const { data: refreshedSession, error: refreshError } = await supabase.auth.refreshSession({
+            refresh_token: sessionData.refresh_token,
+        });
+
+        if (refreshError || !refreshedSession || !refreshedSession.session) {
+            console.error("Failed to refresh session:", refreshError?.message || "No session returned");
+            throw new Error("Failed to refresh session");
+        }
+
+        // Update the session data with the new tokens
+        sessionData = {
+            access_token: refreshedSession.session.access_token,
+            refresh_token: refreshedSession.session.refresh_token,
+            expires_at: refreshedSession.session.expires_at,
+            expires_in: refreshedSession.session.expires_in,
+        };
+
+        // Update the cookie with the new session data
+        cookieStore.set("sb-auth-session", JSON.stringify(sessionData), {
+            path: "/",
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            maxAge: 3 * 60 * 60, // 3 hours in seconds
+        });
+
+        console.log("Session refreshed successfully:", sessionData);
+    }
+
+    // Set the session using the access token (either original or refreshed)
+    const { error: setSessionError } = await supabase.auth.setSession({
+        access_token: sessionData.access_token,
+        refresh_token: sessionData.refresh_token || "",
+    });
+
+    if (setSessionError) {
+        console.error("Failed to set session:", setSessionError.message);
+        throw new Error("Failed to authenticate session");
+    }
+
+    // Get the authenticated user
+    const { data: { user }, error: getUserError } = await supabase.auth.getUser();
+
+    if (getUserError || !user) {
+        console.error("Failed to get user:", getUserError?.message || "No user found");
+        throw new Error("Unauthorized");
+    }
+
+    return user;
+};
 
 export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
 
     try {
-        // Create Supabase client with automatic session handling
-        const supabase = createRouteHandlerClient({ cookies });
-        const { data: { user }, error } = await supabase.auth.getUser();
-
-        if (error || !user) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
+        // Authenticate the user
+        const user = await authenticateUser();
 
         const jobApplications = await prisma.job_application.findMany({
             where: { ...(userId ? { userId } : { userId: user.id }) },
@@ -35,9 +117,8 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(jobApplications, { status: 200 });
     } catch (error) {
         console.error("Error fetching job applications:", error);
-        return NextResponse.json({ error: "Failed to fetch job applications" }, { status: 500 });
-    } finally {
-        await prisma.$disconnect();
+        const errorMessage = error instanceof Error ? error.message : "Failed to fetch job applications";
+        return NextResponse.json({ error: errorMessage }, { status: errorMessage === "Unauthorized" ? 401 : 500 });
     }
 }
 
@@ -46,14 +127,8 @@ export async function POST(request: NextRequest) {
     console.log("Received POST data:", data);
 
     try {
-        // Create Supabase client with automatic session handling
-        const supabase = createRouteHandlerClient({ cookies });
-        const { data: { user }, error } = await supabase.auth.getUser();
-
-        if (error || !user) {
-            console.error("Authentication failed:", error);
-            return NextResponse.json({ error: "Unauthorized", details: error?.message || "No user found" }, { status: 401 });
-        }
+        // Authenticate the user
+        const user = await authenticateUser();
 
         // Ensure the userId in the data matches the authenticated user
         if (data.userId !== user.id) {
@@ -116,9 +191,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(newApplication, { status: 201 });
     } catch (error) {
         console.error("Error creating job application:", error);
-        return NextResponse.json({ error: "Failed to create job application", details: error instanceof Error ? error.message : "Unknown error" }, { status: 500 });
-    } finally {
-        await prisma.$disconnect();
+        const errorMessage = error instanceof Error ? error.message : "Failed to create job application";
+        return NextResponse.json(
+            { error: errorMessage, details: error instanceof Error ? error.message : "Unknown error" },
+            { status: errorMessage === "Unauthorized" ? 401 : 500 }
+        );
     }
 }
 
@@ -126,13 +203,8 @@ export async function PUT(request: NextRequest) {
     const data = await request.json();
 
     try {
-        // Create Supabase client with automatic session handling
-        const supabase = createRouteHandlerClient({ cookies });
-        const { data: { user }, error } = await supabase.auth.getUser();
-
-        if (error || !user) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
+        // Authenticate the user
+        const user = await authenticateUser();
 
         if (!data.id) {
             return NextResponse.json({ error: "Application ID is required" }, { status: 400 });
@@ -178,9 +250,8 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json(updatedApplication, { status: 200 });
     } catch (error) {
         console.error("Error updating job application:", error);
-        return NextResponse.json({ error: "Failed to update job application" }, { status: 500 });
-    } finally {
-        await prisma.$disconnect();
+        const errorMessage = error instanceof Error ? error.message : "Failed to update job application";
+        return NextResponse.json({ error: errorMessage }, { status: errorMessage === "Unauthorized" ? 401 : 500 });
     }
 }
 
@@ -189,13 +260,8 @@ export async function DELETE(request: NextRequest) {
     let id = searchParams.get("id");
 
     try {
-        // Create Supabase client with automatic session handling
-        const supabase = createRouteHandlerClient({ cookies });
-        const { data: { user }, error } = await supabase.auth.getUser();
-
-        if (error || !user) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
+        // Authenticate the user
+        const user = await authenticateUser();
 
         if (!id) {
             const body = await request.json();
@@ -227,8 +293,13 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ message: "Application deleted successfully", id }, { status: 200 });
     } catch (error) {
         console.error("Error deleting job application:", error);
-        return NextResponse.json({ error: "Failed to delete job application" }, { status: 500 });
-    } finally {
-        await prisma.$disconnect();
+        const errorMessage = error instanceof Error ? error.message : "Failed to delete job application";
+        return NextResponse.json({ error: errorMessage }, { status: errorMessage === "Unauthorized" ? 401 : 500 });
     }
 }
+
+// Ensure Prisma disconnects when the server shuts down
+process.on("beforeExit", async () => {
+    await prisma.$disconnect();
+    console.log("Prisma client disconnected from database");
+});

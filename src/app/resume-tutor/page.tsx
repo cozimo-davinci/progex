@@ -15,6 +15,8 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { ScrollText } from "lucide-react";
 import { BriefcaseBusiness, ArrowUp } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import CombinedLoadingAnimation from "@/components/ui/loading-dots"; // Import the loading component
+
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -59,9 +61,10 @@ const ResumeTutor = () => {
     const [selectedApplication, setSelectedApplication] = useState<string | null>(null);
     const [previousResumes, setPreviousResumes] = useState<PreviousResume[]>([]);
     const [pastApplications, setPastApplications] = useState<PastApplication[]>([]);
-    const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false); // For download modal
-    const [isExpandModalOpen, setIsExpandModalOpen] = useState(false); // For expand modal
+    const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+    const [isExpandModalOpen, setIsExpandModalOpen] = useState(false);
     const [downloadType, setDownloadType] = useState<'resume' | 'cover-letter' | null>(null);
+    const [isDataLoading, setIsDataLoading] = useState(true); // New state for loading
 
     // Credibility tab states
     const [credibilitySelectedAppId, setCredibilitySelectedAppId] = useState<string | null>(null);
@@ -70,13 +73,12 @@ const ResumeTutor = () => {
     const [isInitialAnalysisProcessing, setIsInitialAnalysisProcessing] = useState(false);
     const [isReAnalysisProcessing, setIsReAnalysisProcessing] = useState(false);
 
-    //Framer motion states
+    // Framer motion states
     const [showScrollTop, setShowScrollTop] = useState(false);
 
     const credibilitySelectedApp = applications.find(app => app.id === credibilitySelectedAppId);
 
-
-    //Scroll Detection Logic
+    // Scroll Detection Logic
     const checkScrollTop = () => {
         if (window.scrollY > 200) {
             setShowScrollTop(true);
@@ -96,8 +98,7 @@ const ResumeTutor = () => {
             top: 0,
             behavior: 'smooth'
         });
-    }
-
+    };
 
     // Reset re-analysis state when the selected application changes
     useEffect(() => {
@@ -107,36 +108,38 @@ const ResumeTutor = () => {
 
     // Fetch previous resumes and past applications on mount
     useEffect(() => {
-        const fetchPreviousResumes = async () => {
+        const fetchData = async () => {
+            setIsDataLoading(true); // Start loading
+
             try {
-                const response = await fetch("/api/user-resumes");
-                if (response.ok) {
-                    const { resumes } = await response.json();
+                // Fetch previous resumes
+                const resumeResponse = await fetch("/api/user-resumes");
+                if (resumeResponse.ok) {
+                    const { resumes } = await resumeResponse.json();
                     setPreviousResumes(resumes || []);
                 } else {
-                    console.error('Failed to fetch resumes:', await response.text());
+                    console.error('Failed to fetch resumes:', await resumeResponse.text());
                 }
-            } catch (error) {
-                console.error("Error fetching previous resumes:", error);
-            }
-        };
 
-        const fetchPastApplications = async () => {
-            try {
-                const response = await fetch("/api/user-job-postings");
-                if (response.ok) {
-                    const { applications } = await response.json();
-                    setPastApplications(applications || []);
+                // Fetch past applications and their documents
+                const applicationsResponse = await fetch("/api/user-job-postings");
+                if (applicationsResponse.ok) {
+                    const { applications: fetchedApplications } = await applicationsResponse.json();
+                    setPastApplications(fetchedApplications || []);
+
+                    // Fetch documents for all applications in parallel
                     const loadedApplications = await Promise.all(
-                        (applications || []).map(async (app: PastApplication) => {
+                        (fetchedApplications || []).map(async (app: PastApplication) => {
                             const [resumeRes, coverRes, signedUrlRes] = await Promise.all([
                                 fetch(`/api/s3-content?key=${app.tailoredResumeKey}`),
                                 fetch(`/api/s3-content?key=${app.coverLetterKey}`),
                                 fetch(`/api/get-signed-url?key=${app.resumeKey}`),
                             ]);
+
                             const resumeData = await resumeRes.json();
                             const coverData = await coverRes.json();
                             const signedUrlData = await signedUrlRes.json();
+
                             return {
                                 id: app.id,
                                 resumeKey: app.resumeKey,
@@ -151,17 +154,19 @@ const ResumeTutor = () => {
                             };
                         })
                     );
+
                     setApplications(loadedApplications);
                 } else {
-                    console.error('Failed to fetch applications:', await response.text());
+                    console.error('Failed to fetch applications:', await applicationsResponse.text());
                 }
             } catch (error) {
-                console.error("Error fetching past applications:", error);
+                console.error("Error fetching data:", error);
+            } finally {
+                setIsDataLoading(false); // Stop loading once all data is fetched
             }
         };
 
-        fetchPreviousResumes();
-        fetchPastApplications();
+        fetchData();
     }, []);
 
     const saveContent = async (key: string, content: string) => {
@@ -301,7 +306,7 @@ const ResumeTutor = () => {
             console.error('Error downloading document:', error);
             toast.error('Failed to download document');
         } finally {
-            setIsDownloadModalOpen(false); // Close the download modal
+            setIsDownloadModalOpen(false);
             setDownloadType(null);
         }
     };
@@ -389,6 +394,11 @@ const ResumeTutor = () => {
     };
 
     const currentApp = applications.find(app => app.id === selectedApplication);
+
+    // Render the loading animation while data is being fetched
+    if (isDataLoading) {
+        return <CombinedLoadingAnimation />;
+    }
 
     return (
         <div
@@ -708,8 +718,8 @@ const ResumeTutor = () => {
                                                             labels: ['Score', 'Missing'],
                                                             datasets: [{
                                                                 data: [credibilitySelectedApp.credibilityScore, 100 - credibilitySelectedApp.credibilityScore],
-                                                                backgroundColor: ['#22c55e', '#4b5563'], // Vibrant green and muted gray
-                                                                borderColor: ['#fc03d3', '#d121b4'], // Dark blue border for contrast
+                                                                backgroundColor: ['#22c55e', '#4b5563'],
+                                                                borderColor: ['#fc03d3', '#d121b4'],
                                                                 borderWidth: 3,
                                                             }],
                                                         }}
@@ -729,7 +739,7 @@ const ResumeTutor = () => {
                                                                 animateScale: true,
                                                                 animateRotate: true,
                                                             },
-                                                            cutout: '60%', // Doughnut-style chart
+                                                            cutout: '60%',
                                                         }}
                                                         className="drop-shadow-lg"
                                                     />
@@ -748,7 +758,6 @@ const ResumeTutor = () => {
                                                         className="bg-black text-white rounded-lg p-3 shadow-md shadow-black border border-gray-600 hover:bg-gray-700 transition-colors duration-200 text-center flex items-center justify-center space-x-2"
                                                     >
                                                         <ScrollText className="text-red-700" />
-
                                                         <span className="font-bold">{keyword}</span>
                                                     </div>
                                                 ))}
@@ -808,8 +817,8 @@ const ResumeTutor = () => {
                                                             labels: ['Score', 'Missing'],
                                                             datasets: [{
                                                                 data: [reAnalysisResult.score, 100 - reAnalysisResult.score],
-                                                                backgroundColor: ['#22c55e', '#4b5563'], // Vibrant green and muted gray
-                                                                borderColor: ['#fc03d3', '#d121b4'], // Pink border to match Initial Analysis
+                                                                backgroundColor: ['#22c55e', '#4b5563'],
+                                                                borderColor: ['#fc03d3', '#d121b4'],
                                                                 borderWidth: 3,
                                                             }],
                                                         }}
@@ -829,7 +838,7 @@ const ResumeTutor = () => {
                                                                 animateScale: true,
                                                                 animateRotate: true,
                                                             },
-                                                            cutout: '60%', // Doughnut-style chart
+                                                            cutout: '60%',
                                                         }}
                                                         className="drop-shadow-lg"
                                                     />
@@ -856,19 +865,7 @@ const ResumeTutor = () => {
                                     )}
 
                                     {/* Display Resumes */}
-                                    {/* <div className="grid grid-cols-2 gap-4 mt-4"> */}
-                                    <div >
-                                        {/* <div>
-                                            <h3 className="text-lg font-semibold text-white">Original Resume</h3>
-                                            {credibilitySelectedApp.originalResumeUrl ? (
-                                                <iframe
-                                                    src={credibilitySelectedApp.originalResumeUrl}
-                                                    className="w-full h-96 border-2 dark:border-purple-500 border-yellow-500 rounded-lg"
-                                                />
-                                            ) : (
-                                                <p className="text-white">Original resume not available.</p>
-                                            )}
-                                        </div> */}
+                                    <div>
                                         <div className="mt-6">
                                             <h3 className="text-lg font-semibold text-white">Tailored Resume</h3>
                                             <TipTapEditor
@@ -890,8 +887,7 @@ const ResumeTutor = () => {
                 {showScrollTop && (
                     <motion.button
                         onClick={scrollToTop}
-                        className="fixed bottom-8 right-8 p-3 bg-black font-bold text-white rounded-full shadow-lg hover:bg-orange-600 transition-colors duration-200
-                        z-10"
+                        className="fixed bottom-8 right-8 p-3 bg-black font-bold text-white rounded-full shadow-lg hover:bg-orange-600 transition-colors duration-200 z-10"
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 20 }}
@@ -899,12 +895,9 @@ const ResumeTutor = () => {
                     >
                         <ArrowUp className="h-6 w-6" />
                     </motion.button>
-                )
-
-                }
+                )}
             </AnimatePresence>
         </div>
-
     );
 };
 
