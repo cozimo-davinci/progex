@@ -17,7 +17,7 @@ import { ModeToggle } from "@/components/ui/dark-mode";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createSupabaseClient } from "../../app/lib/utils/supabase/client";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import {
@@ -54,23 +54,46 @@ export function NavigationMenuDemo() {
     const [isScrolled, setIsScrolled] = React.useState(false);
 
     const router = useRouter();
-    const supabase = createClientComponentClient();
+    const supabase = createSupabaseClient();
 
-    // Initialize session and auth state listener
+    // Initialize session and auth state
     React.useEffect(() => {
         const checkSession = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            setIsLoggedIn(!!session);
+            const sessionString = localStorage.getItem('sb-auth-session');
+            if (!sessionString) {
+                setIsLoggedIn(false);
+                return;
+            }
+
+            const sessionData = JSON.parse(sessionString);
+            const currentTime = Math.floor(Date.now() / 1000);
+
+            // Refresh session if expired
+            if (currentTime >= sessionData.expires_at) {
+                const { data: refreshedSession, error } = await supabase.auth.refreshSession({
+                    refresh_token: sessionData.refresh_token,
+                });
+
+                if (error || !refreshedSession.session) {
+                    localStorage.removeItem('sb-auth-session');
+                    setIsLoggedIn(false);
+                    return;
+                }
+
+                const newSessionData = {
+                    access_token: refreshedSession.session.access_token,
+                    refresh_token: refreshedSession.session.refresh_token,
+                    expires_at: refreshedSession.session.expires_at,
+                    expires_in: refreshedSession.session.expires_in,
+                };
+
+                localStorage.setItem('sb-auth-session', JSON.stringify(newSessionData));
+            }
+
+            setIsLoggedIn(true);
         };
+
         checkSession();
-
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-            setIsLoggedIn(!!session);
-        });
-
-        return () => {
-            subscription.unsubscribe();
-        };
     }, [supabase]);
 
     // Detect scroll position
@@ -85,10 +108,6 @@ export function NavigationMenuDemo() {
     // Logout function
     const handleLogout = async () => {
         try {
-            // Sign out on the client side to clear the session
-            await supabase.auth.signOut();
-
-            // Optional: Call the API route for server-side cleanup
             const response = await fetch("/api/auth/logout", {
                 method: "POST",
                 credentials: "include",
@@ -99,6 +118,8 @@ export function NavigationMenuDemo() {
                 throw new Error(data.error || "Logout failed");
             }
 
+            // Clear localStorage
+            localStorage.removeItem('sb-auth-session');
             setIsLoggedIn(false);
             toast.success("Logout successful!", { description: "See you soon!" });
             setTimeout(() => {
@@ -189,9 +210,11 @@ export function NavigationMenuDemo() {
                                     </Collapsible>
                                 </NavigationMenuItem>
                                 <NavigationMenuItem>
-                                    <Link href="/dashboard" legacyBehavior passHref>
-                                        <NavigationMenuLink className={navigationMenuTriggerStyle()}>Dashboard</NavigationMenuLink>
-                                    </Link>
+                                    <NavigationMenuLink asChild>
+                                        <Link href="/dashboard" className={navigationMenuTriggerStyle()}>
+                                            Dashboard
+                                        </Link>
+                                    </NavigationMenuLink>
                                 </NavigationMenuItem>
                                 {isLoggedIn ? (
                                     <NavigationMenuItem>
@@ -202,14 +225,18 @@ export function NavigationMenuDemo() {
                                 ) : (
                                     <>
                                         <NavigationMenuItem>
-                                            <Link href="/login" legacyBehavior passHref>
-                                                <NavigationMenuLink className={navigationMenuTriggerStyle()}>Log In</NavigationMenuLink>
-                                            </Link>
+                                            <NavigationMenuLink asChild>
+                                                <Link href="/login" className={navigationMenuTriggerStyle()}>
+                                                    Log In
+                                                </Link>
+                                            </NavigationMenuLink>
                                         </NavigationMenuItem>
                                         <NavigationMenuItem>
-                                            <Link href="/signup" legacyBehavior passHref>
-                                                <NavigationMenuLink className={navigationMenuTriggerStyle()}>Sign Up</NavigationMenuLink>
-                                            </Link>
+                                            <NavigationMenuLink asChild>
+                                                <Link href="/signup" className={navigationMenuTriggerStyle()}>
+                                                    Sign Up
+                                                </Link>
+                                            </NavigationMenuLink>
                                         </NavigationMenuItem>
                                     </>
                                 )}
@@ -268,11 +295,11 @@ export function NavigationMenuDemo() {
                         </NavigationMenuContent>
                     </NavigationMenuItem>
                     <NavigationMenuItem>
-                        <Link href="/dashboard" legacyBehavior passHref>
-                            <NavigationMenuLink className={navigationMenuTriggerStyle()}>
+                        <NavigationMenuLink asChild>
+                            <Link href="/dashboard" className={navigationMenuTriggerStyle()}>
                                 Dashboard
-                            </NavigationMenuLink>
-                        </Link>
+                            </Link>
+                        </NavigationMenuLink>
                     </NavigationMenuItem>
                     {isLoggedIn ? (
                         <NavigationMenuItem>
@@ -286,18 +313,18 @@ export function NavigationMenuDemo() {
                     ) : (
                         <>
                             <NavigationMenuItem>
-                                <Link href="/login" legacyBehavior passHref>
-                                    <NavigationMenuLink className={navigationMenuTriggerStyle()}>
+                                <NavigationMenuLink asChild>
+                                    <Link href="/login" className={navigationMenuTriggerStyle()}>
                                         Log In
-                                    </NavigationMenuLink>
-                                </Link>
+                                    </Link>
+                                </NavigationMenuLink>
                             </NavigationMenuItem>
                             <NavigationMenuItem>
-                                <Link href="/signup" legacyBehavior passHref>
-                                    <NavigationMenuLink className={navigationMenuTriggerStyle()}>
+                                <NavigationMenuLink asChild>
+                                    <Link href="/signup" className={navigationMenuTriggerStyle()}>
                                         Sign Up
-                                    </NavigationMenuLink>
-                                </Link>
+                                    </Link>
+                                </NavigationMenuLink>
                             </NavigationMenuItem>
                         </>
                     )}

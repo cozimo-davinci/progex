@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { createSupabaseClient } from "../../../supabaseClient";
+import { createSupabaseClient } from "../lib/utils/supabase/client";
 import { DataTable } from "./data-table";
 import { columns } from "./columns";
 import { Button } from "@/components/ui/button";
@@ -15,10 +15,10 @@ import {
 } from "@/components/ui/dialog";
 import ApplicationForm from "./application-form";
 import URLForm from "./url-form";
-import { toast } from "sonner"; // For notifications
-import Papa from "papaparse"; // For CSV parsing
-import { format, parse } from "date-fns"; // For date formatting
-import { X } from "lucide-react"; // For the remove file icon
+import { toast } from "sonner";
+import Papa from "papaparse";
+import { format, parse } from "date-fns";
+import { X } from "lucide-react";
 
 interface Application {
     id: string;
@@ -35,6 +35,7 @@ interface Application {
 const Dashboard = () => {
     const [jobApplications, setJobApplications] = useState<Application[]>([]);
     const [loading, setLoading] = useState(true);
+    const [sessionLoading, setSessionLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -42,29 +43,80 @@ const Dashboard = () => {
     const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
     const [csvFile, setCsvFile] = useState<File | null>(null);
     const [importLoading, setImportLoading] = useState(false);
-    const [isDragging, setIsDragging] = useState(false); // For drag-and-drop state
-    const fileInputRef = useRef<HTMLInputElement>(null); // Ref for the hidden file input
+    const [isDragging, setIsDragging] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const router = useRouter();
+    const supabase = createSupabaseClient();
 
     useEffect(() => {
         const fetchData = async () => {
-            try {
-                const supabase = createSupabaseClient();
-                const { data: { session } } = await supabase.auth.getSession();
+            const sessionString = localStorage.getItem('sb-auth-session');
+            if (!sessionString) {
+                toast.error("Session not detected!", { description: "Please log in." });
+                router.push("/login");
+                setSessionLoading(false);
+                return;
+            }
 
-                if (!session) {
+            const sessionData = JSON.parse(sessionString);
+            const currentTime = Math.floor(Date.now() / 1000);
+
+            const supabase = createSupabaseClient();
+
+            // Refresh session if expired
+            if (currentTime >= sessionData.expires_at) {
+                const { data: refreshedSession, error } = await supabase.auth.refreshSession({
+                    refresh_token: sessionData.refresh_token,
+                });
+
+                if (error || !refreshedSession.session) {
+                    localStorage.removeItem('sb-auth-session');
+                    toast.error("Session expired!", { description: "Please log in again." });
                     router.push("/login");
+                    setSessionLoading(false);
                     return;
                 }
 
-                const userId = session.user.id;
-                setUserId(userId);
+                const newSessionData = {
+                    access_token: refreshedSession.session.access_token,
+                    refresh_token: refreshedSession.session.refresh_token,
+                    expires_at: refreshedSession.session.expires_at,
+                    expires_in: refreshedSession.session.expires_in,
+                };
 
-                const response = await fetch(`/api/applications?userId=${userId}`);
+                localStorage.setItem('sb-auth-session', JSON.stringify(newSessionData));
+                await supabase.auth.setSession({
+                    access_token: newSessionData.access_token,
+                    refresh_token: newSessionData.refresh_token,
+                });
+            } else {
+                await supabase.auth.setSession({
+                    access_token: sessionData.access_token,
+                    refresh_token: sessionData.refresh_token,
+                });
+            }
+
+            const { data: { session } } = await supabase.auth.getSession();
+            setSessionLoading(false);
+
+            if (!session) {
+                toast.error("Session not detected!", { description: "Please log in." });
+                router.push("/login");
+                return;
+            }
+
+            const userId = session.user.id;
+            setUserId(userId);
+
+            try {
+                const response = await fetch(`/api/applications?userId=${userId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${session.access_token}`,
+                    },
+                });
                 if (!response.ok) {
                     throw new Error("Failed to fetch job applications");
                 }
-
                 const data: Application[] = await response.json();
                 setJobApplications(data);
             } catch (err) {
@@ -141,20 +193,20 @@ const Dashboard = () => {
     const handleRemoveFile = () => {
         setCsvFile(null);
         if (fileInputRef.current) {
-            fileInputRef.current.value = ""; // Reset the file input
+            fileInputRef.current.value = "";
         }
     };
 
     const handleAreaClick = () => {
         if (fileInputRef.current) {
-            fileInputRef.current.click(); // Trigger the file input click
+            fileInputRef.current.click();
         }
     };
 
     const standardizeDate = (dateStr: string): string | null => {
         const possibleFormats = [
-            "yyyy-MM-dd HH:mm:ss", // For "2025-03-17 04:00:00"
-            "yyyy-MM-dd HH:mm:ss.SSS", // For "2025-04-08 15:27:20.421"
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss.SSS",
             "MM/dd/yyyy",
             "dd/MM/yyyy",
             "yyyy-MM-dd",
@@ -270,7 +322,48 @@ const Dashboard = () => {
                 toast.warning(`${duplicatesInCSV.length} duplicate entries found in the CSV and skipped.`);
             }
 
-            const existingApplications = await fetch(`/api/applications?userId=${userId}`).then((res) => res.json());
+            // Refresh the session before making API calls
+            const sessionString = localStorage.getItem('sb-auth-session');
+            if (!sessionString) {
+                toast.error("Session not detected!", { description: "Please log in." });
+                router.push("/login");
+                setImportLoading(false);
+                return;
+            }
+
+            const sessionData = JSON.parse(sessionString);
+            const currentTime = Math.floor(Date.now() / 1000);
+            let accessToken = sessionData.access_token;
+
+            if (currentTime >= sessionData.expires_at) {
+                const { data: refreshedSession, error } = await supabase.auth.refreshSession({
+                    refresh_token: sessionData.refresh_token,
+                });
+
+                if (error || !refreshedSession.session) {
+                    localStorage.removeItem('sb-auth-session');
+                    toast.error("Session expired!", { description: "Please log in again." });
+                    router.push("/login");
+                    setImportLoading(false);
+                    return;
+                }
+
+                const newSessionData = {
+                    access_token: refreshedSession.session.access_token,
+                    refresh_token: refreshedSession.session.refresh_token,
+                    expires_at: refreshedSession.session.expires_at,
+                    expires_in: refreshedSession.session.expires_in,
+                };
+
+                localStorage.setItem('sb-auth-session', JSON.stringify(newSessionData));
+                accessToken = newSessionData.access_token;
+            }
+
+            const existingApplications = await fetch(`/api/applications?userId=${userId}`, {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                },
+            }).then((res) => res.json());
             const existingLinks = new Set(existingApplications.map((app: Application) => app.link));
             const existingPositionCompany = new Set(
                 existingApplications.map((app: Application) =>
@@ -295,6 +388,7 @@ const Dashboard = () => {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
+                    'Authorization': `Bearer ${accessToken}`,
                 },
                 body: JSON.stringify({ applications: applicationsToInsert }),
             });
@@ -315,6 +409,10 @@ const Dashboard = () => {
             setImportLoading(false);
         }
     };
+
+    if (sessionLoading) {
+        return <div className="p-4">Loading session...</div>;
+    }
 
     if (loading) {
         return <div className="p-4">Loading...</div>;
@@ -372,12 +470,10 @@ const Dashboard = () => {
                             <DialogTitle>Import Job Applications from CSV</DialogTitle>
                         </DialogHeader>
                         <div className="space-y-4 mt-2 mb-2">
-                            {/* Custom Drag-and-Drop Area */}
                             <div
                                 className={`relative flex flex-col items-center 
                                     justify-center border-4 border-dashed border-gray-500 rounded-xl
-                                     p-6 py-28 transition-colors ${isDragging ? "bg-gray-800" : "bg-black"
-                                    }`}
+                                     p-6 py-28 transition-colors ${isDragging ? "bg-gray-800" : "bg-black"}`}
                                 onDrop={handleDrop}
                                 onDragOver={handleDragOver}
                                 onDragLeave={handleDragLeave}
@@ -395,7 +491,6 @@ const Dashboard = () => {
                                 </p>
                             </div>
 
-                            {/* File Name Card */}
                             {csvFile && (
                                 <div className="flex justify-center">
                                     <div className="relative bg-gray-800 border border-gray-300 rounded-2xl 

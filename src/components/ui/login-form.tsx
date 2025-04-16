@@ -9,7 +9,6 @@ import Image from "next/image";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"; // Import the correct client
 
 export function LoginForm({ className, ...props }: React.ComponentProps<"div">) {
     const [email, setEmail] = useState("");
@@ -19,11 +18,8 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
 
-    // Initialize Supabase client directly
-    const supabase = createClientComponentClient();
-
     useEffect(() => {
-        setIsLoading(false); // No complex initialization needed
+        setIsLoading(false);
     }, []);
 
     const handleLogin = async (e: React.FormEvent) => {
@@ -34,7 +30,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password }),
-                credentials: "include", // Ensure cookies are included
+                credentials: "include",
             });
 
             const data = await response.json();
@@ -44,37 +40,24 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                 toast.error("Login failed!", {
                     description: "Something went wrong, please try again!",
                 });
-            } else {
-                console.log("Login response:", data);
-
-                // The login API sets the session cookies; verify the session
-                const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-                console.log("Session data after login:", sessionData);
-                console.log("Session error after login:", sessionError);
-
-                if (sessionError) throw sessionError;
-                if (!sessionData.session) {
-                    console.warn("No session detected after login, attempting refresh...");
-                    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-                    console.log("Refreshed session data:", refreshData);
-                    console.log("Refreshed session error:", refreshError);
-                    if (refreshError) throw refreshError;
-                    if (!refreshData.session) {
-                        toast.error("Session not detected!", { description: "Please try again or contact support." });
-                        return;
-                    }
-                }
-
-                toast.success("Login successful!", { description: "Welcome back!" });
-                setTimeout(() => {
-                    router.push("/dashboard");
-                }, 500);
+                return;
             }
+
+            // Store the session in localStorage
+            localStorage.setItem('sb-auth-session', JSON.stringify({
+                access_token: data.session.access_token,
+                refresh_token: data.session.refresh_token,
+                expires_at: data.session.expires_at,
+                expires_in: data.session.expires_in,
+            }));
+
+            toast.success("Login successful!", { description: "Welcome back!" });
+            router.push("/dashboard");
         } catch (err) {
             console.error("Login error:", err);
             setError("An unexpected error occurred");
             toast.error("Login failed!", {
-                description: "An unexpected error occurred. Please contact customer support.",
+                description: "An unexpected error occurred.",
             });
         }
     };
