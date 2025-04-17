@@ -6,93 +6,54 @@ const links = [
         group: 'Product',
         items: [
             {
-                title: 'Features',
-                href: '#',
+                title: 'Job Application Tracker',
+                href: '/dashboard',
             },
             {
-                title: 'Solution',
-                href: '#',
+                title: 'Resume Tutor',
+                href: '/resume-tutor',
             },
             {
-                title: 'Customers',
-                href: '#',
+                title: 'AI Interviewer',
+                href: '/interview-ai',
             },
             {
                 title: 'Pricing',
-                href: '#',
+                href: '#pricing',
             },
-            {
-                title: 'Help',
-                href: '#',
-            },
-            {
-                title: 'About',
-                href: '#',
-            },
-        ],
-    },
-    {
-        group: 'Solution',
-        items: [
-            {
-                title: 'Startup',
-                href: '#',
-            },
-            {
-                title: 'Freelancers',
-                href: '#',
-            },
-            {
-                title: 'Organizations',
-                href: '#',
-            },
-            {
-                title: 'Students',
-                href: '#',
-            },
-            {
-                title: 'Collaboration',
-                href: '#',
-            },
-            {
-                title: 'Design',
-                href: '#',
-            },
-            {
-                title: 'Management',
-                href: '#',
-            },
+
         ],
     },
     {
         group: 'Company',
         items: [
             {
+                title: 'Help',
+                href: '/contact-us',
+            },
+            {
                 title: 'About',
-                href: '#',
+                href: '/about-us',
             },
             {
                 title: 'Careers',
-                href: '#',
+                href: '/careers',
             },
             {
                 title: 'Blog',
-                href: '#',
+                href: '/blog',
             },
             {
                 title: 'Press',
-                href: '#',
+                href: '/news',
             },
             {
                 title: 'Contact',
-                href: '#',
-            },
-            {
-                title: 'Help',
-                href: '#',
+                href: '/contact-us',
             },
         ],
     },
+
     {
         group: 'Legal',
         items: [
@@ -141,7 +102,7 @@ export default function FooterSection() {
                     </div>
                 </div>
                 <div className="mt-12 flex flex-wrap items-end justify-between gap-6 border-t py-6">
-                    <span className="text-muted-foreground order-last block text-center text-sm md:order-first">© {new Date().getFullYear()} Tailus UI, All rights reserved</span>
+                    <span className="text-muted-foreground order-last block text-center text-sm md:order-first">© {new Date().getFullYear()} Progex, All rights reserved</span>
                     <div className="order-first flex flex-wrap justify-center gap-6 text-sm md:order-last">
                         <Link href="#" target="_blank" rel="noopener noreferrer" aria-label="X/Twitter" className="text-muted-foreground hover:text-primary block">
                             <svg className="size-6" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24">

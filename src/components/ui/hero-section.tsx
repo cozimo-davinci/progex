@@ -203,77 +203,77 @@ export default function HeroSection() {
                         </div>
                         <div className="group-hover:blur-xs mx-auto mt-12 grid max-w-2xl grid-cols-4 gap-x-12 gap-y-8 transition-all duration-500 group-hover:opacity-50 sm:gap-x-16 sm:gap-y-14">
                             <div className="flex">
-                                <img
-                                    className="mx-auto h-5 w-fit dark:invert"
-                                    src="https://html.tailus.io/blocks/customers/nvidia.svg"
-                                    alt="Nvidia Logo"
-                                    height="20"
-                                    width="auto"
+                                <Image
+                                    className="mx-auto h-24 w-fit "
+                                    src="/images/stanford.png"
+                                    alt="Stanford Logo"
+                                    height="120"
+                                    width="120"
                                 />
                             </div>
 
                             <div className="flex">
-                                <img
-                                    className="mx-auto h-4 w-fit dark:invert"
-                                    src="https://html.tailus.io/blocks/customers/column.svg"
-                                    alt="Column Logo"
-                                    height="16"
-                                    width="auto"
+                                <Image
+                                    className="mx-auto h-24 w-fit "
+                                    src="/images/harvard.png"
+                                    alt="Harvard Logo"
+                                    height="120"
+                                    width="120"
                                 />
                             </div>
                             <div className="flex">
-                                <img
-                                    className="mx-auto h-4 w-fit dark:invert"
-                                    src="https://html.tailus.io/blocks/customers/github.svg"
-                                    alt="GitHub Logo"
-                                    height="16"
-                                    width="auto"
+                                <Image
+                                    className="mx-auto h-24 w-fit"
+                                    src="/images/columbia.png"
+                                    alt="Columbia Unviersity Logo"
+                                    height="120"
+                                    width="120"
                                 />
                             </div>
                             <div className="flex">
-                                <img
-                                    className="mx-auto h-5 w-fit dark:invert"
-                                    src="https://html.tailus.io/blocks/customers/nike.svg"
-                                    alt="Nike Logo"
-                                    height="20"
-                                    width="auto"
+                                <Image
+                                    className="mx-auto h-24 w-fit"
+                                    src="/images/oxford.png"
+                                    alt="Oxford University Logo"
+                                    height="120"
+                                    width="120"
                                 />
                             </div>
                             <div className="flex">
-                                <img
-                                    className="mx-auto h-5 w-fit dark:invert"
-                                    src="https://html.tailus.io/blocks/customers/lemonsqueezy.svg"
-                                    alt="Lemon Squeezy Logo"
-                                    height="20"
-                                    width="auto"
+                                <Image
+                                    className="mx-auto h-24 w-fit"
+                                    src="/images/auburn.png"
+                                    alt="Auburn University Logo"
+                                    height="120"
+                                    width="120"
                                 />
                             </div>
                             <div className="flex">
-                                <img
-                                    className="mx-auto h-4 w-fit dark:invert"
-                                    src="https://html.tailus.io/blocks/customers/laravel.svg"
-                                    alt="Laravel Logo"
-                                    height="16"
-                                    width="auto"
+                                <Image
+                                    className="mx-auto h-24 w-fit"
+                                    src="/images/yale.png"
+                                    alt="Yale University Logo"
+                                    height="120"
+                                    width="120"
                                 />
                             </div>
                             <div className="flex">
-                                <img
-                                    className="mx-auto h-7 w-fit dark:invert"
-                                    src="https://html.tailus.io/blocks/customers/lilly.svg"
-                                    alt="Lilly Logo"
-                                    height="28"
-                                    width="auto"
+                                <Image
+                                    className="mx-auto h-24 w-fit"
+                                    src="/images/princeton.png"
+                                    alt="Princeton University Logo"
+                                    height="120"
+                                    width="120"
                                 />
                             </div>
 
                             <div className="flex">
-                                <img
-                                    className="mx-auto h-6 w-fit dark:invert"
-                                    src="https://html.tailus.io/blocks/customers/openai.svg"
-                                    alt="OpenAI Logo"
-                                    height="24"
-                                    width="auto"
+                                <Image
+                                    className="mx-auto h-24 w-fit"
+                                    src="/images/bristol.png"
+                                    alt="University of Bristol Logo"
+                                    height="120"
+                                    width="120"
                                 />
                             </div>
                         </div>
