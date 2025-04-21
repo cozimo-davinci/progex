@@ -12,7 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
-import { ScrollText } from "lucide-react";
+import { ScrollText, HandshakeIcon, PenToolIcon } from "lucide-react";
 import { BriefcaseBusiness, ArrowUp } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import CombinedLoadingAnimation from "@/components/ui/loading-dots";
@@ -269,10 +269,8 @@ const ResumeTutor = () => {
         }
     };
 
-    const handleDownload = async (format: 'pdf' | 'docx') => {
-        if (!downloadType || !currentApp) return;
-
-        const key = downloadType === 'resume' ? currentApp.tailoredResumeKey : currentApp.coverLetterKey;
+    const handleDownload = async (format: 'pdf' | 'docx', app: JobApplication, type: 'resume' | 'cover-letter') => {
+        const key = type === 'resume' ? app.tailoredResumeKey : app.coverLetterKey;
         if (!key) {
             toast.error('Document not available');
             return;
@@ -293,12 +291,12 @@ const ResumeTutor = () => {
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `${currentApp.companyName}-${currentApp.position}-${downloadType}.${format}`;
+            link.download = `${app.companyName}-${app.position}-${type}.${format}`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
-            toast.success(`Downloaded ${downloadType} as ${format.toUpperCase()}`);
+            toast.success(`Downloaded ${type} as ${format.toUpperCase()}`);
         } catch (error) {
             console.error('Error downloading document:', error);
             toast.error('Failed to download document');
@@ -407,132 +405,99 @@ const ResumeTutor = () => {
             }}
         >
             <div className="absolute inset-0 bg-black bg-opacity-20 rounded-lg"></div>
-            <div className="relative z-10 w-full max-w-7xl">
-                <h1 className="text-3xl dark:text-white text-white text-center font-bold">Welcome to Resume Tutor</h1>
+            <div className="relative z-10 w-full max-w-full">
+                <h1 className="text-3xl dark:text-fuchsia-100 text-center font-bold text-fuchsia-100">Welcome to Resume Tutor</h1>
                 <Tabs defaultValue="ai-tutor" className="w-full mt-6">
-                    <TabsList className="grid w-full grid-cols-2">
+                    <TabsList className="grid w-full grid-cols-2 shadow-sm shadow-black">
                         <TabsTrigger value="ai-tutor">AI-Tutor</TabsTrigger>
                         <TabsTrigger value="credibility">Credibility</TabsTrigger>
                     </TabsList>
 
-                    {/* AI-Tutor Tab: Updated Layout */}
+                    {/* AI-Tutor Tab */}
                     <TabsContent value="ai-tutor">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {/* Left Side: Input Elements and Content */}
-                            <div className="md:border-r md:border-gray-300 overflow-y-auto">
-                                {/* Your Past Documents */}
-                                <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
-                                    <Label className="text-xl font-bold mb-4 block dark:text-white text-white">Your Past Documents</Label>
-                                    {previousResumes.length > 0 && (
-                                        <div className="mb-4">
-                                            <Label htmlFor="previous-resumes" className="text-lg font-semibold mb-2 block dark:text-white text-white">Select Previous Initial Resume</Label>
-                                            <select
-                                                id="previous-resumes"
-                                                value={resumeKey || ""}
-                                                onChange={(e) => {
-                                                    const selectedKey = e.target.value;
-                                                    setResumeKey(selectedKey);
-                                                    const selectedResume = previousResumes.find(resume => resume.key === selectedKey);
-                                                    if (selectedResume) {
-                                                        fetch(`/api/get-signed-url?key=${selectedKey}`)
-                                                            .then(res => res.json())
-                                                            .then(data => {
-                                                                const existingApp = applications.find(app => app.resumeKey === selectedKey);
-                                                                if (!existingApp) {
-                                                                    setApplications(prev => [...prev, {
-                                                                        id: "",
-                                                                        resumeKey: selectedKey,
-                                                                        tailoredResumeKey: "",
-                                                                        coverLetterKey: "",
-                                                                        jobDescription: "",
-                                                                        tailoredResumeContent: "",
-                                                                        coverLetterContent: "",
-                                                                        originalResumeUrl: data.url,
-                                                                    }]);
-                                                                }
-                                                                setSelectedApplication(selectedKey);
-                                                            });
-                                                    }
-                                                }}
-                                                className="w-full p-2 bg-slate-900 text-white border-2 dark:border-yellow-500 rounded-md"
-                                            >
-                                                <option value="">Select a resume</option>
+                            <div className=" overflow-y-auto">
+                                {/* Resume Selection Tabs */}
+                                <Tabs defaultValue="previous">
+                                    <TabsList className="shadow-sm shadow-black">
+                                        <TabsTrigger value="previous">Previous Resumes</TabsTrigger>
+                                        <TabsTrigger value="new">New Resumes</TabsTrigger>
+                                    </TabsList>
+                                    <TabsContent value="previous">
+                                        <div className="bg-slate-900 shadow-sm shadow-black border-2 py-4 px-4 rounded-xl dark:border-yellow-500">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                 {previousResumes.map(resume => (
-                                                    <option key={resume.key} value={resume.key}>
-                                                        {resume.name}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    )}
-                                    {pastApplications.length > 0 && (
-                                        <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg p-6 shadow-lg shadow-black/50 border border-gray-700">
-                                            <Label className="text-lg font-semibold mb-4 block text-white">Past Tailored Applications</Label>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                                {pastApplications.map((app) => (
                                                     <div
-                                                        key={`${app.id}-${app.resumeKey}-${app.companyName}-${app.position}`}
-                                                        className={`bg-gray-800 rounded-xl p-4 shadow-md border border-gray-600 hover:bg-slate-900 transition-all duration-200 flex flex-col justify-between h-48 hover:cursor-pointer ${selectedApplication === app.id ? "border-2 border-yellow-500" : ""}`}
-                                                    >
-                                                        <BriefcaseBusiness className="text-orange-500" />
-                                                        <div className="flex-grow flex items-center justify-center">
-                                                            <h3 className="text-white font-semibold text-center text-lg">
-                                                                {app.companyName} - {app.position}
-                                                            </h3>
-                                                        </div>
-                                                        <Button
-                                                            variant="outline"
-                                                            className="w-full text-yellow-500 border-yellow-500 hover:bg-yellow-500 hover:text-gray-900 transition-colors duration-200"
-                                                            onClick={() => {
-                                                                setSelectedApplication(app.id);
-                                                                setTimeout(() => {
-                                                                    if (resultsRef.current) {
-                                                                        resultsRef.current.scrollIntoView({ behavior: "smooth" });
+                                                        key={resume.key}
+                                                        className="bg-gray-800 w-fit rounded-xl p-4 shadow-lg shadow-black border border-gray-600 hover:bg-slate-900 transition-all duration-200 flex flex-col justify-between h-32 cursor-pointer"
+                                                        onClick={() => {
+                                                            setResumeKey(resume.key);
+                                                            fetch(`/api/get-signed-url?key=${resume.key}`)
+                                                                .then(res => res.json())
+                                                                .then(data => {
+                                                                    const existingApp = applications.find(app => app.resumeKey === resume.key);
+                                                                    if (!existingApp) {
+                                                                        const tempID = uuidv4();
+                                                                        setApplications(prev => [...prev, {
+                                                                            id: tempID,
+                                                                            resumeKey: resume.key,
+                                                                            tailoredResumeKey: "",
+                                                                            coverLetterKey: "",
+                                                                            jobDescription: "",
+                                                                            tailoredResumeContent: "",
+                                                                            coverLetterContent: "",
+                                                                            originalResumeUrl: data.url,
+                                                                        }]);
+                                                                        setSelectedApplication(tempID);
+                                                                    } else {
+                                                                        setSelectedApplication(existingApp.id);
                                                                     }
-                                                                }, 300);
-                                                            }}
-                                                        >
-                                                            View
-                                                        </Button>
+                                                                });
+                                                        }}
+                                                    >
+                                                        <HandshakeIcon className="text-orange-500" size={24} />
+                                                        <h3 className="text-white font-semibold text-center">{resume.name}</h3>
                                                     </div>
                                                 ))}
                                             </div>
                                         </div>
-                                    )}
-                                </div>
+                                    </TabsContent>
+                                    <TabsContent value="new">
+                                        <div className="w-full bg-slate-900 border-2 shadow-sm shadow-black rounded-xl dark:border-yellow-500 py-4 px-4">
+                                            <Label htmlFor="resume-upload" className="text-xl font-bold mb-4 block dark:text-white text-white">Upload New Resume</Label>
+                                            <Input id="resume-upload" type="file" accept=".pdf,.doc,.docx" onChange={handleFileUpload} className="dark:border-slate-100 border-2 border-dotted gap-2 h-24" />
+                                            <p className="text-sm text-muted-foreground text-center mt-2"><span className="font-bold">Note:</span> Supported formats: PDF, DOC, DOCX.</p>
+                                        </div>
+                                    </TabsContent>
+                                </Tabs>
 
-                                {/* Resume Upload */}
-                                <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
-                                    <Label htmlFor="resume-upload" className="text-xl font-bold mb-4 block dark:text-white text-white">Upload New Resume</Label>
-                                    <Input id="resume-upload" type="file" accept=".pdf,.doc,.docx" onChange={handleFileUpload} className="dark:border-purple-500" />
-                                    <p className="text-sm text-muted-foreground text-center mt-2"><span className="font-bold">Note:</span> Supported formats: PDF, DOC, DOCX.</p>
-                                </div>
-
-                                {/* Job Description */}
-                                <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
-                                    <Label htmlFor="job-desc" className="text-xl font-bold mb-4 block dark:text-white text-white">Job Description</Label>
-                                    <Textarea id="job-desc" placeholder="Paste job description here." value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} className="dark:border-purple-500" />
-                                </div>
-
-                                {/* Company Name */}
-                                <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
-                                    <Label htmlFor="company-name" className="text-xl font-bold mb-4 block dark:text-white text-white">Company Name</Label>
-                                    <Input id="company-name" placeholder="Enter company name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="dark:border-purple-500" />
-                                </div>
-
-                                {/* Position */}
-                                <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
-                                    <Label htmlFor="position" className="text-xl font-bold mb-4 block dark:text-white text-white">Position</Label>
-                                    <Input id="position" placeholder="Enter position" value={position} onChange={(e) => setPosition(e.target.value)} className="dark:border-purple-500" />
+                                {/* Job Details */}
+                                <div className="mt-10 w-full bg-slate-900 shadow-sm shadow-black border-2 rounded-xl dark:border-yellow-500 py-4 px-4">
+                                    <Label className="text-xl font-bold mb-4 block dark:text-white text-white">Job Details</Label>
+                                    <div className="flex gap-4">
+                                        <div className="flex-1">
+                                            <Label htmlFor="company-name" className="text-lg font-semibold mb-2 block dark:text-white text-white">Company Name</Label>
+                                            <Input id="company-name" placeholder="Enter company name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="dark:border-slate-100 border-2" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <Label htmlFor="position" className="text-lg font-semibold mb-2 block dark:text-white text-white">Position</Label>
+                                            <Input id="position" placeholder="Enter position" value={position} onChange={(e) => setPosition(e.target.value)} className="dark:border-slate-100 border-2" />
+                                        </div>
+                                    </div>
+                                    <div className="mt-4">
+                                        <Label htmlFor="job-desc" className="text-lg font-semibold mb-2 block dark:text-white text-white">Job Description</Label>
+                                        <Textarea id="job-desc" placeholder="Paste job description here." value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} className="dark:border-slate-100 border-2" />
+                                    </div>
                                 </div>
 
                                 {/* Prompt */}
-                                <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
+                                <div className="mt-10 w-full bg-slate-900 shadow-sm shadow-black border-2 rounded-xl dark:border-yellow-500 py-4 px-4">
                                     <Label htmlFor="prompt" className="text-xl font-bold mb-4 block dark:text-white text-white">Prompt</Label>
-                                    <Input id="prompt" placeholder="E.g., Tailor my resume based on the job description." value={prompt} onChange={(e) => setPrompt(e.target.value)} className="dark:border-purple-500" />
+                                    <Input id="prompt" placeholder="E.g., Tailor my resume based on the job description." value={prompt} onChange={(e) => setPrompt(e.target.value)} className="dark:border-slate-100 border-2" />
                                 </div>
 
-                                {/* Button */}
+                                {/* Receive Suggestions Button */}
                                 <Button
                                     className="mt-4 text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
                                     onClick={handleReceiveSuggestions}
@@ -540,33 +505,49 @@ const ResumeTutor = () => {
                                 >
                                     {isProcessing ? "Processing..." : "Receive Suggestions"}
                                 </Button>
-
-                                {/* Application Selection */}
-                                {/* {applications.length > 0 && (
-                                    <div className="mt-10">
-                                        <Label className="text-2xl font-bold mb-4 block dark:text-white text-white">Select Application</Label>
-                                        <select
-                                            value={selectedApplication || ""}
-                                            onChange={(e) => setSelectedApplication(e.target.value)}
-                                            className="w-full p-2 bg-slate-900 text-white border-2 dark:border-yellow-500 rounded-md"
-                                        >
-                                            <option value="">Select an application</option>
-                                            {applications.map(app => (
-                                                <option key={app.id} value={app.id}>
-                                                    {app.companyName && app.position ? `${app.companyName} - ${app.position}` : `Resume: ${app.resumeKey.split('/').pop()}`}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                )} */}
                             </div>
 
-                            {/* Right Side: Results Section */}
+                            {/* Right Side: Past Tailored Applications and Results Section */}
                             <div className="overflow-y-auto">
+                                {/* Past Tailored Applications */}
+                                <div className="mt-10 w-full bg-slate-900 shadow-sm shadow-black border-2 rounded-2xl dark:border-yellow-500 py-4 px-4">
+                                    <Label className="text-xl font-bold mb-4 block dark:text-white text-white">Past Tailored Applications</Label>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {pastApplications.map((app) => (
+                                            <div
+                                                key={`${app.id}-${app.resumeKey}-${app.companyName}-${app.position}`}
+                                                className={`bg-gray-800 rounded-xl p-4 shadow-lg shadow-black border border-gray-600 hover:bg-slate-900 transition-all duration-200 flex flex-col justify-between h-48 hover:cursor-pointer ${selectedApplication === app.id ? "border-2 border-yellow-500" : ""}`}
+                                            >
+                                                <BriefcaseBusiness className="text-orange-500" />
+                                                <div className="flex-grow flex items-center justify-center">
+                                                    <h3 className="text-white font-semibold text-center text-lg">
+                                                        {app.companyName} - {app.position}
+                                                    </h3>
+                                                </div>
+                                                <Button
+                                                    variant="outline"
+                                                    className="w-full text-yellow-500 border-yellow-500 hover:bg-yellow-500 hover:text-gray-900 transition-colors duration-200"
+                                                    onClick={() => {
+                                                        setSelectedApplication(app.id);
+                                                        setTimeout(() => {
+                                                            if (resultsRef.current) {
+                                                                resultsRef.current.scrollIntoView({ behavior: "smooth" });
+                                                            }
+                                                        }, 300);
+                                                    }}
+                                                >
+                                                    View
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Results Section */}
                                 {currentApp ? (
                                     <div
                                         ref={resultsRef}
-                                        className="relative z-10 w-full h-auto mt-10 bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4 overflow-y-auto"
+                                        className="relative z-10 w-full h-auto mt-10 bg-slate-900 border-2 rounded-xl dark:border-yellow-500 py-4 px-4 overflow-y-auto"
                                     >
                                         <Label className="text-xl font-bold mb-4 block dark:text-white text-white">Results</Label>
                                         <div className="flex justify-end space-x-4 mb-4">
@@ -588,8 +569,8 @@ const ResumeTutor = () => {
                                                         <DialogTitle>Choose Download Format for Resume</DialogTitle>
                                                     </DialogHeader>
                                                     <div className="flex justify-around mt-4">
-                                                        <Button onClick={() => handleDownload('pdf')}>PDF</Button>
-                                                        <Button onClick={() => handleDownload('docx')}>DOCX</Button>
+                                                        <Button onClick={() => handleDownload('pdf', currentApp, 'resume')}>PDF</Button>
+                                                        <Button onClick={() => handleDownload('docx', currentApp, 'resume')}>DOCX</Button>
                                                     </div>
                                                 </DialogContent>
                                             </Dialog>
@@ -612,8 +593,8 @@ const ResumeTutor = () => {
                                                         <DialogTitle>Choose Download Format for Cover Letter</DialogTitle>
                                                     </DialogHeader>
                                                     <div className="flex justify-around mt-4">
-                                                        <Button onClick={() => handleDownload('pdf')}>PDF</Button>
-                                                        <Button onClick={() => handleDownload('docx')}>DOCX</Button>
+                                                        <Button onClick={() => handleDownload('pdf', currentApp, 'cover-letter')}>PDF</Button>
+                                                        <Button onClick={() => handleDownload('docx', currentApp, 'cover-letter')}>DOCX</Button>
                                                     </div>
                                                 </DialogContent>
                                             </Dialog>
@@ -630,7 +611,7 @@ const ResumeTutor = () => {
                                                         <>
                                                             <iframe
                                                                 src={currentApp.originalResumeUrl}
-                                                                className="w-full h-auto max-h-[50vh] mt-4 border-2 dark:border-purple-500 border-yellow-500 rounded-lg mr-4"
+                                                                className="w-full h-auto max-h-[50vh] mt-4 border-2 dark:border-slate-100 border-yellow-500 rounded-lg mr-4"
                                                                 style={{ maxWidth: '100%', overflow: 'auto' }}
                                                             />
                                                             <Dialog open={isExpandModalOpen} onOpenChange={setIsExpandModalOpen}>
@@ -691,29 +672,29 @@ const ResumeTutor = () => {
                                         </Tabs>
                                     </div>
                                 ) : (
-                                    <p className="text-white mt-10">Select an application to view results</p>
+                                    <p className="text-white mt-10 bg-slate-900 rounded-xl w-fit py-4 px-4 dark:border-yellow-500 border-2 shadow-sm shadow-black">Select an application to view results</p>
                                 )}
                             </div>
                         </div>
                     </TabsContent>
 
-                    {/* Credibility Tab: Unchanged */}
+                    {/* Credibility Tab */}
                     <TabsContent value="credibility">
-                        <div className="mt-10 w-full bg-slate-900 bg-opacity-90 border-2 rounded-md dark:border-yellow-500 py-4 px-4">
-                            <h2 className="text-2xl font-bold text-white">Credibility Analysis</h2>
-                            <Label className="text-lg font-semibold text-white mt-4 block">Select Application</Label>
-                            <select
-                                value={credibilitySelectedAppId || ""}
-                                onChange={(e) => setCredibilitySelectedAppId(e.target.value)}
-                                className="w-full p-2 bg-slate-900 text-white border-2 dark:border-yellow-500 rounded-md"
-                            >
-                                <option value="">Select an application</option>
+                        <div className="mt-10 w-full bg-slate-900 border-2 border-yellow-500 rounded-lg py-4 px-4">
+                            <h2 className="text-3xl font-bold text-white">Credibility Analysis</h2>
+                            <Label className="text-lg font-semibold text-white mt-4 block mb-4">Select Application</Label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 {pastApplications.map(app => (
-                                    <option key={app.id} value={app.id}>
-                                        {app.companyName} - {app.position}
-                                    </option>
+                                    <div
+                                        key={app.id}
+                                        className={`bg-gray-800 rounded-xl p-4 shadow-lg shadow-black border border-gray-600 hover:bg-slate-900 transition-all duration-200 flex flex-col justify-between h-32 cursor-pointer ${credibilitySelectedAppId === app.id ? "border-2 border-yellow-500" : ""}`}
+                                        onClick={() => setCredibilitySelectedAppId(app.id)}
+                                    >
+                                        <PenToolIcon className="text-orange-500" size={24} />
+                                        <h3 className="text-white font-semibold text-center">{app.companyName} - {app.position}</h3>
+                                    </div>
                                 ))}
-                            </select>
+                            </div>
 
                             {credibilitySelectedApp && (
                                 <div className="mt-4">
@@ -773,8 +754,8 @@ const ResumeTutor = () => {
                                             </div>
                                         </div>
                                     ) : (
-                                        <div>
-                                            <h3 className="text-xl font-bold text-white">Initial Analysis</h3>
+                                        <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg p-6 shadow-lg shadow-black/50 border border-gray-700">
+                                            <h3 className="text-2xl font-bold text-white mb-4">Initial Analysis</h3>
                                             <Textarea
                                                 value={credibilitySelectedApp.jobDescription}
                                                 onChange={(e) => {
@@ -785,12 +766,12 @@ const ResumeTutor = () => {
                                                     );
                                                 }}
                                                 placeholder="Paste job description here for initial analysis"
-                                                className="dark:border-purple-500 mt-2"
+                                                className="border-2 dark:border-slate-100 mt-2 font-bold"
                                             />
                                             <Button
                                                 onClick={handleAnalyzeCredibility}
                                                 disabled={isInitialAnalysisProcessing || !credibilitySelectedApp.jobDescription}
-                                                className="mt-2 text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
+                                                className="mt-4 text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
                                             >
                                                 {isInitialAnalysisProcessing ? "Analyzing..." : "Analyze Credibility"}
                                             </Button>
@@ -798,13 +779,7 @@ const ResumeTutor = () => {
                                     )}
 
                                     <div className="mt-6 bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg p-6 shadow-lg shadow-black/50 border border-gray-700">
-                                        <h3 className="text-xl font-bold text-white mb-4">Re-analyze with Job Description</h3>
-                                        <Textarea
-                                            value={newJobDescription}
-                                            onChange={(e) => setNewJobDescription(e.target.value)}
-                                            placeholder="Paste new job description here or leave empty to use cached one"
-                                            className="dark:border-purple-500 mt-2 bg-gray-800 text-white placeholder-gray-400 rounded-md p-3"
-                                        />
+                                        <h3 className="text-2xl font-bold text-white mb-4">Re-analyze with Cached Job Description</h3>
                                         <Button
                                             onClick={handleReAnalyze}
                                             disabled={isReAnalysisProcessing}
@@ -871,16 +846,46 @@ const ResumeTutor = () => {
                                         </div>
                                     )}
 
-                                    <div>
-                                        <div className="mt-6">
-                                            <h3 className="text-lg font-semibold text-white">Tailored Resume</h3>
-                                            <TipTapEditor
-                                                value={credibilitySelectedApp.tailoredResumeContent}
-                                                editable={false}
-                                                onChange={() => { }}
-                                                style={{ width: '100%', height: '700px', overflowY: 'auto' }}
-                                            />
+                                    <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg p-6 shadow-lg shadow-black/50 border border-gray-700 mt-6">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="text-2xl font-bold text-white">Tailored Resume</h3>
+                                            <Dialog open={isDownloadModalOpen && downloadType === 'resume'} onOpenChange={setIsDownloadModalOpen}>
+                                                <DialogTrigger asChild>
+                                                    <Button
+                                                        onClick={() => {
+                                                            setDownloadType('resume');
+                                                            setIsDownloadModalOpen(true);
+                                                        }}
+                                                        disabled={!credibilitySelectedApp.tailoredResumeKey}
+                                                        className="text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
+                                                    >
+                                                        Download Tailored Resume
+                                                    </Button>
+                                                </DialogTrigger>
+                                                <DialogContent>
+                                                    <DialogHeader>
+                                                        <DialogTitle>Choose Download Format for Resume</DialogTitle>
+                                                    </DialogHeader>
+                                                    <div className="flex justify-around mt-4">
+                                                        <Button onClick={() => handleDownload('pdf', credibilitySelectedApp, 'resume')}>PDF</Button>
+                                                        <Button onClick={() => handleDownload('docx', credibilitySelectedApp, 'resume')}>DOCX</Button>
+                                                    </div>
+                                                </DialogContent>
+                                            </Dialog>
                                         </div>
+                                        <TipTapEditor
+                                            value={credibilitySelectedApp.tailoredResumeContent}
+                                            editable={true}
+                                            onChange={(content) => {
+                                                setApplications((prev) =>
+                                                    prev.map((app) =>
+                                                        app.id === credibilitySelectedApp.id ? { ...app, tailoredResumeContent: content } : app
+                                                    )
+                                                );
+                                                saveContentDebounced(credibilitySelectedApp.tailoredResumeKey, content);
+                                            }}
+                                            style={{ width: '100%', height: '700px', overflowY: 'auto' }}
+                                        />
                                     </div>
                                 </div>
                             )}
