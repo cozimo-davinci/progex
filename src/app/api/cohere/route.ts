@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
                 api_key: process.env.SCRAPINGBEE_API_KEY || '',
                 url,
                 render_js: 'true',
-                wait: '5000',
+                wait: '7000',
                 extract_rules: JSON.stringify({ text: 'body' }), // Target job description
             });
 

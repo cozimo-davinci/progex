@@ -12,7 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
-import { ScrollText, HandshakeIcon, PenToolIcon } from "lucide-react";
+import { ScrollText, HandshakeIcon, PenToolIcon, X, FileInputIcon } from "lucide-react";
 import { BriefcaseBusiness, ArrowUp } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import CombinedLoadingAnimation from "@/components/ui/loading-dots";
@@ -51,6 +51,7 @@ interface PastApplication {
 
 const ResumeTutor = () => {
     const resultsRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const [resumeKey, setResumeKey] = useState<string | null>(null);
     const [jobDescription, setJobDescription] = useState("");
     const [prompt, setPrompt] = useState("");
@@ -65,6 +66,9 @@ const ResumeTutor = () => {
     const [isExpandModalOpen, setIsExpandModalOpen] = useState(false);
     const [downloadType, setDownloadType] = useState<'resume' | 'cover-letter' | null>(null);
     const [isDataLoading, setIsDataLoading] = useState(true);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
 
     // Credibility tab states
     const [credibilitySelectedAppId, setCredibilitySelectedAppId] = useState<string | null>(null);
@@ -182,12 +186,56 @@ const ResumeTutor = () => {
     };
     const saveContentDebounced = useMemo(() => debounce(saveContent, 3000), []);
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+    const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        setIsDragging(false);
+        const file = event.dataTransfer.files?.[0];
+        if (file && ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(file.type)) {
+            setSelectedFile(file);
+        } else {
+            toast.error('Please upload a valid file (PDF, DOC, DOCX).');
+        }
+    };
 
+    const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        setIsDragging(true);
+    };
+
+    const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        setIsDragging(false);
+    };
+
+    const handleAreaClick = () => {
+        if (fileInputRef.current) {
+            fileInputRef.current.click();
+        }
+    };
+
+    const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file && ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(file.type)) {
+            setSelectedFile(file);
+        } else {
+            toast.error('Please upload a valid file (PDF, DOC, DOCX).');
+            setSelectedFile(null);
+        }
+    };
+
+    const handleRemoveFile = () => {
+        setSelectedFile(null);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
+    const handleUploadConfirm = async () => {
+        if (!selectedFile) return;
+
+        setIsUploading(true);
         const formData = new FormData();
-        formData.append("file", file);
+        formData.append("file", selectedFile);
 
         try {
             const response = await fetch("/api/upload", {
@@ -216,9 +264,15 @@ const ResumeTutor = () => {
                     const { resumes } = await resumesResponse.json();
                     setPreviousResumes(resumes);
                 }
+                setSelectedFile(null); // Clear selected file after successful upload
+            } else {
+                throw new Error("Failed to upload file");
             }
         } catch (error) {
             console.error("Error uploading resume:", error);
+            toast.error("Failed to upload resume.");
+        } finally {
+            setIsUploading(false);
         }
     };
 
@@ -417,7 +471,7 @@ const ResumeTutor = () => {
                     <TabsContent value="ai-tutor">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {/* Left Side: Input Elements and Content */}
-                            <div className=" overflow-y-auto">
+                            <div className="overflow-y-auto">
                                 {/* Resume Selection Tabs */}
                                 <Tabs defaultValue="previous">
                                     <TabsList className="shadow-sm shadow-black">
@@ -465,9 +519,63 @@ const ResumeTutor = () => {
                                     </TabsContent>
                                     <TabsContent value="new">
                                         <div className="w-full bg-slate-900 border-2 shadow-sm shadow-black rounded-xl dark:border-yellow-500 py-4 px-4">
-                                            <Label htmlFor="resume-upload" className="text-xl font-bold mb-4 block dark:text-white text-white">Upload New Resume</Label>
-                                            <Input id="resume-upload" type="file" accept=".pdf,.doc,.docx" onChange={handleFileUpload} className="dark:border-slate-100 border-2 border-dotted gap-2 h-24" />
-                                            <p className="text-sm text-muted-foreground text-center mt-2"><span className="font-bold">Note:</span> Supported formats: PDF, DOC, DOCX.</p>
+                                            <Label className="text-xl font-bold mb-4 block dark:text-white text-white">Upload New Resume</Label>
+                                            <div
+                                                className={`relative flex flex-col items-center justify-center hover:cursor-pointer border-4 border-dashed border-gray-500 rounded-xl p-6 py-28 transition-colors ${isDragging ? "bg-gray-800" : "bg-black"}`}
+                                                onDrop={handleDrop}
+                                                onDragOver={handleDragOver}
+                                                onDragLeave={handleDragLeave}
+                                                onClick={handleAreaClick}
+                                            >
+                                                <input
+                                                    type="file"
+                                                    accept=".pdf,.doc,.docx"
+                                                    onChange={handleInputChange}
+                                                    className="hidden"
+                                                    ref={fileInputRef}
+                                                />
+                                                <p className="text-center text-white font-bold">Drag and drop your file</p>
+                                                <div className="my-2 w-full flex justify-center items-center">
+                                                    <hr className="w-1/2 border-t-2 border-gray-500" />
+                                                </div>
+                                                <p className="text-center text-white font-bold">OR</p>
+                                                <p className="text-center text-white font-bold mt-2">Upload manually</p>
+                                            </div>
+
+                                            {selectedFile && (
+                                                <div className="flex justify-center mt-4 hover:cursor-pointer">
+                                                    <div className="relative bg-gray-800 border border-gray-300 rounded-2xl py-4 px-6 shadow-sm flex flex-col items-center justify-between text-center gap-2 w-fit max-w-xl h-24">
+                                                        <div className="flex items-center gap-2 w-full justify-center relative">
+                                                            <FileInputIcon className="h-7 w-7 text-orange-500 " />
+                                                            <span className="text-white font-bold truncate max-w-[calc(100%-40px)]">{selectedFile.name}</span>
+                                                            <button
+                                                                onClick={handleRemoveFile}
+                                                                className="text-red-500 font-bold bg-black rounded-lg hover:text-red-600 absolute -top-2 -right-2"
+                                                                aria-label="Remove file"
+                                                            >
+                                                                <X className="h-7 w-7 hover:bg-gray-400 rounded-lg bg-black absolute -right-5.5 -top-5" />
+                                                            </button>
+                                                        </div>
+                                                        <span className="text-white text-sm bg-gray-500 w-fit rounded-lg font-bold px-2 py-1">
+                                                            {selectedFile.name.split('.').pop()?.toUpperCase() || 'FILE'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="flex justify-center mt-4">
+                                                <Button
+                                                    onClick={handleUploadConfirm}
+                                                    disabled={!selectedFile || isUploading}
+                                                    className="w-1/3 text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
+                                                >
+                                                    {isUploading ? "Uploading..." : "Upload Resume"}
+                                                </Button>
+                                            </div>
+
+                                            <p className="text-sm text-muted-foreground text-center mt-2">
+                                                <span className="font-bold">Note:</span> Supported formats: PDF, DOC, DOCX.
+                                            </p>
                                         </div>
                                     </TabsContent>
                                 </Tabs>
