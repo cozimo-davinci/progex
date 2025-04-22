@@ -16,24 +16,25 @@ import { ScrollText, HandshakeIcon, PenToolIcon, X, FileInputIcon } from "lucide
 import { BriefcaseBusiness, ArrowUp } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import CombinedLoadingAnimation from "@/components/ui/loading-dots";
-
+import RepurposeResumeButton from "@components/ui/RepurposeResumeButton";
+import { JobApplication } from "@/types/types";
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
 
-interface JobApplication {
-    id: string;
-    resumeKey: string;
-    tailoredResumeKey: string;
-    coverLetterKey: string;
-    jobDescription: string;
-    tailoredResumeContent: string;
-    coverLetterContent: string;
-    originalResumeUrl?: string;
-    companyName?: string;
-    position?: string;
-    credibilityScore?: number;
-    missingKeywords?: string[];
-}
+// interface JobApplication {
+//     id: string;
+//     resumeKey: string;
+//     tailoredResumeKey: string;
+//     coverLetterKey: string;
+//     jobDescription: string;
+//     tailoredResumeContent: string;
+//     coverLetterContent: string;
+//     originalResumeUrl?: string;
+//     companyName?: string;
+//     position?: string;
+//     credibilityScore?: number;
+//     missingKeywords?: string[];
+// }
 
 interface PreviousResume {
     key: string;
@@ -957,29 +958,37 @@ const ResumeTutor = () => {
                                     <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg p-6 shadow-lg shadow-black/50 border border-gray-700 mt-6">
                                         <div className="flex justify-between items-center mb-4">
                                             <h3 className="text-2xl font-bold text-white">Tailored Resume</h3>
-                                            <Dialog open={isDownloadModalOpen && downloadType === 'resume'} onOpenChange={setIsDownloadModalOpen}>
-                                                <DialogTrigger asChild>
-                                                    <Button
-                                                        onClick={() => {
-                                                            setDownloadType('resume');
-                                                            setIsDownloadModalOpen(true);
-                                                        }}
-                                                        disabled={!credibilitySelectedApp.tailoredResumeKey}
-                                                        className="text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
-                                                    >
-                                                        Download Tailored Resume
-                                                    </Button>
-                                                </DialogTrigger>
-                                                <DialogContent>
-                                                    <DialogHeader>
-                                                        <DialogTitle>Choose Download Format for Resume</DialogTitle>
-                                                    </DialogHeader>
-                                                    <div className="flex justify-around mt-4">
-                                                        <Button onClick={() => handleDownload('pdf', credibilitySelectedApp, 'resume')}>PDF</Button>
-                                                        <Button onClick={() => handleDownload('docx', credibilitySelectedApp, 'resume')}>DOCX</Button>
-                                                    </div>
-                                                </DialogContent>
-                                            </Dialog>
+                                            <div className="flex gap-2">
+                                                <RepurposeResumeButton
+                                                    application={credibilitySelectedApp}
+                                                    setApplications={setApplications}
+                                                    saveContentDebounced={saveContentDebounced}
+                                                />
+
+                                                <Dialog open={isDownloadModalOpen && downloadType === 'resume'} onOpenChange={setIsDownloadModalOpen}>
+                                                    <DialogTrigger asChild>
+                                                        <Button
+                                                            onClick={() => {
+                                                                setDownloadType('resume');
+                                                                setIsDownloadModalOpen(true);
+                                                            }}
+                                                            disabled={!credibilitySelectedApp.tailoredResumeKey}
+                                                            className="text-white border-white border-2 rounded-md hover:scale-105 shadow-lg border-b-4 border-r-4 border-r-yellow-500 border-b-yellow-500"
+                                                        >
+                                                            Download Tailored Resume
+                                                        </Button>
+                                                    </DialogTrigger>
+                                                    <DialogContent>
+                                                        <DialogHeader>
+                                                            <DialogTitle>Choose Download Format for Resume</DialogTitle>
+                                                        </DialogHeader>
+                                                        <div className="flex justify-around mt-4">
+                                                            <Button onClick={() => handleDownload('pdf', credibilitySelectedApp, 'resume')}>PDF</Button>
+                                                            <Button onClick={() => handleDownload('docx', credibilitySelectedApp, 'resume')}>DOCX</Button>
+                                                        </div>
+                                                    </DialogContent>
+                                                </Dialog>
+                                            </div>
                                         </div>
                                         <TipTapEditor
                                             value={credibilitySelectedApp.tailoredResumeContent}
