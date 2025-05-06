@@ -115,7 +115,11 @@ const Dashboard = () => {
                     },
                 });
                 if (!response.ok) {
-                    throw new Error("Failed to fetch job applications");
+                    // throw new Error("Failed to fetch job applications");
+                    toast.info("Your session has expired", {description: "Redirecting to login page."});
+                    setTimeout(() => {
+                        router.push("/login");
+                    }, 2000)
                 }
                 const data: Application[] = await response.json();
                 setJobApplications(data);

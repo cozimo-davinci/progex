@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
+import Image from "next/image";
 import { Label } from "@/components/ui/label";
 import { Input } from "@components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -481,11 +482,11 @@ const ResumeTutor = () => {
                                     </TabsList>
                                     <TabsContent value="previous">
                                         <div className="bg-slate-900 shadow-sm shadow-black border-2 py-4 px-4 rounded-xl dark:border-yellow-500">
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-2 w-auto h-auto sm:w-fit sm:h-fit overflow-auto">
                                                 {previousResumes.map(resume => (
                                                     <div
                                                         key={resume.key}
-                                                        className="bg-gray-800 w-fit rounded-xl p-4 shadow-lg shadow-black border border-gray-600 hover:bg-slate-900 transition-all duration-200 flex flex-col justify-between h-32 cursor-pointer"
+                                                        className="bg-gray-800 w-fit rounded-xl p-4 shadow-lg shadow-black border border-gray-600 hover:bg-slate-900 transition-all duration-200 flex flex-col justify-evenly h-32 cursor-pointer"
                                                         onClick={() => {
                                                             setResumeKey(resume.key);
                                                             fetch(`/api/get-signed-url?key=${resume.key}`)
@@ -534,6 +535,14 @@ const ResumeTutor = () => {
                                                     onChange={handleInputChange}
                                                     className="hidden"
                                                     ref={fileInputRef}
+                                                />
+                                                <Image 
+                                                alt="Philosopher utilizing telescope and looking at the star sky and the moon"
+                                                src="/images/upload_picture.png"
+                                                className="w-80 h-80 mb-4 rounded-3xl object-contain shadow-md shadow-cyan-400
+                                                border-r-2 border-b-4 border-l-2 border-l-white border-r-white border-b-white"
+                                                width={320}
+                                                height={320}
                                                 />
                                                 <p className="text-center text-white font-bold">Drag and drop your file</p>
                                                 <div className="my-2 w-full flex justify-center items-center">
